@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "pdfkit": "^0.12.1",
-    "nodemailer": "^6.9.4"
+    "nodemailer": "^6.9.4",
+    "busboy": "^1.6.0"
   },
   "author": "",
   "license": "MIT"
