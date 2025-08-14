@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ogbomoso College of Nursing Science</title>
+  <meta name="description" content="Apply to Ogbomoso College of Nursing Science — Basic Nursing Program" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="wrap">
+      <div class="brand">
+        <img src="images/logo.png" alt="OCNS logo" class="logo" />
+        <div>
+          <h1 class="school-name">Ogbomoso College of <span class="highlight">Nursing Science</span></h1>
+          <p class="tagline">Training <strong>compassionate</strong>, <strong>competent</strong> nurses</p>
+        </div>
+      </div>
+      <nav class="main-nav">
+        <a href="#home">Home</a>
+        <a href="#about">About</a>
+        <a href="#programs">Programs</a>
+        <a href="#why">Why OCNS</a>
+        <a href="#process">How to Apply</a>
+        <a href="#dates">Important Dates</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section id="home" class="hero" style="background-image:url('images/bd.jpg');">
+    <div class="hero-overlay">
+      <div class="wrap hero-inner">
+        <div class="hero-text">
+          <h2 class="hero-heading">🩺 Basic Nursing Admissions <span class="accent">Now Open</span></h2>
+          <p class="hero-sub">Apply now for our <strong>3-year accredited program</strong>. Next intake begins <span class="highlight">September 2025</span>.</p>
+          <button id="showFormBtn" class="btn">Start Your Application</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About -->
+  <section id="about" class="section about">
+    <div class="wrap">
+      <h3 class="section-title">Who We Are</h3>
+      <p>At <strong>OCNS</strong>, we produce nurses who lead with knowledge, empathy, and integrity. Our modern campus, skilled faculty, and accredited programs make us a top choice for aspiring healthcare professionals.</p>
+    </div>
+  </section>
+
+  <!-- Programs -->
+  <section id="programs" class="section programs">
+    <div class="wrap">
+      <h3 class="section-title">📘 Our Program</h3>
+      <ul>
+        <li>🕒 <strong>3-Year Basic Nursing</strong> (Full-time)</li>
+        <li>📚 Theory + Practical + Simulation Lab</li>
+        <li>🏥 Clinical Practice in Top Hospitals</li>
+        <li>📝 Prepares You for NMCN Licensing Exams</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Why OCNS -->
+  <section id="why" class="section why">
+    <div class="wrap">
+      <h3 class="section-title">🎓 Why Choose <span class="highlight">OCNS?</span></h3>
+      <ul>
+        <li>✅ Affordable tuition</li>
+        <li>✅ Hostel & cafeteria on campus</li>
+        <li>✅ Qualified & supportive faculty</li>
+        <li>✅ Access to clinical tools and labs</li>
+        <li>✅ Flexible tuition payment plans</li>
+        <li>✅ Track record of top-performing graduates</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- How to Apply -->
+  <section id="process" class="section howto">
+    <div class="wrap">
+      <h3 class="section-title">📝 How to Apply</h3>
+      <ol>
+        <li>Click the <strong>"Start Your Application"</strong> button above.</li>
+        <li>Fill out all fields and upload necessary documents.</li>
+        <li>Tick the confirmation box and pay <span class="price-tag">₦200</span> via Paystack.</li>
+        <li>Check your email for the acknowledgment slip.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Application Form -->
+  <section id="apply" class="section form-section" style="display:none;">
+    <div class="wrap">
+      <h3 class="section-title">📄 Application Form</h3>
+      <form id="admissionForm" class="form form-grid" autocomplete="off" enctype="multipart/form-data">
+
+        <!-- Personal Info -->
+        <label>Surname
+          <input type="text" name="surname" required />
+        </label>
+        <label>Other Names
+          <input type="text" name="othernames" required />
+        </label>
+        <label>Gender
+          <select name="gender" required>
+            <option value="" disabled selected>Select gender</option>
+            <option>Male</option>
+            <option>Female</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Marital Status
+          <select name="marital_status" required>
+            <option value="" disabled selected>Select status</option>
+            <option>Single</option>
+            <option>Married</option>
+            <option>Divorced</option>
+            <option>Widowed</option>
+          </select>
+        </label>
+        <label>Date of Birth
+          <input type="date" name="dob" required />
+        </label>
+        <label>Religion
+          <select name="religion" required>
+            <option value="" disabled selected>Select religion</option>
+            <option>Christianity</option>
+            <option>Islam</option>
+            <option>Traditional</option>
+            <option>Other</option>
+          </select>
+        </label>
+
+        <!-- Contact -->
+        <label>Email
+          <input type="email" name="email" required />
+        </label>
+        <label>Phone Number
+          <input type="tel" name="phone" required />
+        </label>
+        <label>Country
+          <input type="text" name="country" required />
+        </label>
+        <label>State of Origin
+          <input type="text" name="state_origin" required />
+        </label>
+        <label>State
+          <input type="text" name="state" required />
+        </label>
+        <label>Local Government Area (LGA)
+          <input type="text" name="lga" required />
+        </label>
+        <label>Home Town
+          <input type="text" name="hometown" required />
+        </label>
+        <label>Address
+          <input type="text" name="address" required />
+        </label>
+
+        <!-- Sponsor -->
+        <label>Sponsor Name
+          <input type="text" name="sponsor_name" required />
+        </label>
+        <label>Sponsor Relationship
+          <select name="sponsor_relationship" required>
+            <option value="" disabled selected>Select relationship</option>
+            <option>Father</option>
+            <option>Mother</option>
+            <option>Uncle</option>
+            <option>Guardian</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Sponsor Phone Number
+          <input type="tel" name="sponsor_phone" required />
+        </label>
+        <label>Sponsor Address
+          <input type="text" name="sponsor_address" required />
+        </label>
+
+        <!-- Next of Kin -->
+        <label>Next of Kin Name
+          <input type="text" name="nok_name" required />
+        </label>
+        <label>Next of Kin Relationship
+          <select name="nok_relationship" required>
+            <option value="" disabled selected>Select relationship</option>
+            <option>Father</option>
+            <option>Mother</option>
+            <option>Sibling</option>
+            <option>Spouse</option>
+            <option>Guardian</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Next of Kin Phone Number
+          <input type="tel" name="nok_phone" required />
+        </label>
+        <label>Next of Kin Address
+          <input type="text" name="nok_address" required />
+        </label>
+
+        <!-- File Uploads -->
+        <label>Upload O'Level Result
+          <input type="file" name="olevel" accept=".pdf,.jpg,.jpeg,.png" required />
+        </label>
+        <label>Upload Passport Photo
+          <input type="file" name="passport" accept=".jpg,.jpeg,.png" required />
+        </label>
+
+        <!-- Confirm -->
+        <label class="checkbox">
+          <input type="checkbox" name="confirm" required />
+          I confirm that all information provided is correct
+        </label>
+
+        <p class="price">Application Fee: <span class="price-tag">₦200</span></p>
+        <button type="submit" class="btn">Submit Application</button>
+
+        <div id="formMessage" class="form-message" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Dates -->
+  <section id="dates" class="section dates">
+    <div class="wrap">
+      <h3 class="section-title">📅 Important Dates</h3>
+      <ul>
+        <li><strong>Application Opens:</strong> August 2025</li>
+        <li><strong>Deadline:</strong> September 2025</li>
+        <li><strong>Entrance Exam:</strong> September 2025</li>
+        <li><strong>Admission List:</strong> September 2025</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer" id="contact">
+    <div class="wrap">
+      <h3 class="section-title">📞 Contact Us</h3>
+      <p>Email: <a href="mailto:ogbomosocollegeofnursingscienc@gmail.com">ogbomosocollegeofnursingscienc@gmail.com</a></p>
+      <p>Phone: <strong>07013999936</strong></p>
+      <p>Support: <strong>09164624021</strong></p>
+      <p>Facebook: <a href="https://facebook.com/groups/1461126221519071/" target="_blank">Join Facebook Group</a></p>
+      <p>©️ 2025 Ogbomoso College of Nursing Science. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Paystack SDK -->
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script src="form.js"></script>
+
+  <!-- Show form on button click -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.getElementById('showFormBtn').addEventListener('click', function () {
+        document.getElementById('apply').style.display = 'block';
+        document.getElementById('apply').scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+  </script>
+
+</body>
+</html>
