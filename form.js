@@ -1,0 +1,57 @@
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("admissionForm");
+  const formMessage = document.getElementById("formMessage");
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+
+    if (!formData.get("confirm")) {
+      alert("Please confirm that all information is correct.");
+      return;
+    }
+
+    const email = formData.get("email");
+    const amount = 200 * 100; // ₦200 for testing; change to 16000*100 for live
+
+    formMessage.textContent = "Processing payment...";
+    formMessage.style.color = "blue";
+
+    const handler = PaystackPop.setup({
+      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27", // your public key
+      email: email,
+      amount: amount,
+      currency: "NGN",
+      callback: function (response) {
+        formMessage.textContent = "Payment successful! Sending your application...";
+        formData.append("paymentReference", response.reference);
+
+        fetch("/.netlify/functions/sendEmail", {
+          method: "POST",
+          body: formData,
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              formMessage.style.color = "green";
+              formMessage.textContent = "Application submitted successfully! Check your email.";
+              form.reset();
+            } else {
+              throw new Error(data.error || "Submission failed.");
+            }
+          })
+          .catch(err => {
+            formMessage.style.color = "red";
+            formMessage.textContent = "Error submitting form: " + err.message;
+          });
+      },
+      onClose: function () {
+        formMessage.style.color = "red";
+        formMessage.textContent = "Payment cancelled.";
+      }
+    });
+
+    handler.openIframe();
+  });
+});
