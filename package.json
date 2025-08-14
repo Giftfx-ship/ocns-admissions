@@ -1,0 +1,14 @@
+{
+  "name": "ocns-admissions",
+  "version": "1.0.0",
+  "description": "Ogbomoso College of Nursing Science Admissions",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "pdfkit": "^0.12.1"
+  },
+  "author": "",
+  "license": "MIT"
+}
