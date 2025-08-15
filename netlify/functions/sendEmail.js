@@ -31,7 +31,18 @@ exports.handler = async (event) => {
         const writeStream = fs.createWriteStream(filepath);
         file.pipe(writeStream);
         writeStream.on('finish', () => {
-          files[fieldname] = { path: filepath, filename };
+          const fileData = { path: filepath, filename };
+
+          // Handle multiple files per field by storing as array
+          if (files[fieldname]) {
+            if (Array.isArray(files[fieldname])) {
+              files[fieldname].push(fileData);
+            } else {
+              files[fieldname] = [files[fieldname], fileData];
+            }
+          } else {
+            files[fieldname] = fileData;
+          }
           fileResolve();
         });
         writeStream.on('error', (err) => {
@@ -66,6 +77,15 @@ exports.handler = async (event) => {
 
         const slipPath = await generateSlip(fields, paymentData);
 
+        // Helper to get single file if multiple uploaded accidentally
+        const getSingleFile = (fileField) => {
+          if (Array.isArray(fileField)) return fileField[0];
+          return fileField;
+        };
+
+        const olevelFile = getSingleFile(files.olevel);
+        const passportFile = getSingleFile(files.passport);
+
         const transporter = nodemailer.createTransport({
           service: 'gmail',
           auth: {
@@ -78,12 +98,11 @@ exports.handler = async (event) => {
           { filename: 'acknowledgment_slip.pdf', path: slipPath },
         ];
 
-        // Only attach if path is a string (valid file)
-        if (files.olevel && typeof files.olevel.path === 'string') {
-          attachments.push({ filename: files.olevel.filename, path: files.olevel.path });
+        if (olevelFile && typeof olevelFile.path === 'string') {
+          attachments.push({ filename: olevelFile.filename, path: olevelFile.path });
         }
-        if (files.passport && typeof files.passport.path === 'string') {
-          attachments.push({ filename: files.passport.filename, path: files.passport.path });
+        if (passportFile && typeof passportFile.path === 'string') {
+          attachments.push({ filename: passportFile.filename, path: passportFile.path });
         }
 
         await transporter.sendMail({
@@ -134,10 +153,10 @@ Attached: acknowledgment slip + uploaded files.
           attachments,
         });
 
-        // Cleanup
+        // Cleanup temp files
         fs.unlinkSync(slipPath);
-        if (files.olevel && typeof files.olevel.path === 'string') fs.unlinkSync(files.olevel.path);
-        if (files.passport && typeof files.passport.path === 'string') fs.unlinkSync(files.passport.path);
+        if (olevelFile && typeof olevelFile.path === 'string') fs.unlinkSync(olevelFile.path);
+        if (passportFile && typeof passportFile.path === 'string') fs.unlinkSync(passportFile.path);
 
         resolve({
           statusCode: 200,
