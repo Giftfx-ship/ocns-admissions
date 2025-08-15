@@ -1,11 +1,13 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 module.exports = function generateSlip(formData, paymentData) {
   return new Promise((resolve, reject) => {
     try {
-      const slipPath = path.join('/tmp', `acknowledgment_${Date.now()}.pdf`);
+      // Use os.tmpdir() for portability
+      const slipPath = path.join(os.tmpdir(), `acknowledgment_${Date.now()}.pdf`);
       const doc = new PDFDocument({ margin: 50 });
 
       const writeStream = fs.createWriteStream(slipPath);
@@ -14,13 +16,13 @@ module.exports = function generateSlip(formData, paymentData) {
       // Header background
       doc.rect(0, 0, doc.page.width, 80).fill('#1155cc');
 
-      // Logo (adjust path as needed)
+      // Logo path (adjust as needed, ensure logo.png is deployed)
       const logoPath = path.join(process.cwd(), 'images', 'logo.png');
       if (fs.existsSync(logoPath)) {
         doc.image(logoPath, 50, 15, { width: 50, height: 50 });
       }
 
-      // Title
+      // Title text
       doc.fillColor('#ffffff')
         .fontSize(20)
         .text('Ogbomoso College of Nursing Science', 120, 25);
@@ -32,7 +34,7 @@ module.exports = function generateSlip(formData, paymentData) {
 
       doc.moveDown(2);
       doc.fontSize(12)
-        .text(`Name: ${formData.fullname || `${formData.surname || ''} ${formData.othernames || ''}`}`)
+        .text(`Name: ${formData.fullname || `${formData.surname || ''} ${formData.othernames || ''}`.trim() || 'N/A'}`)
         .text(`Email: ${formData.email || 'N/A'}`)
         .text(`Phone: ${formData.phone || 'N/A'}`)
         .text(`Course: Basic Nursing`)
@@ -60,6 +62,7 @@ module.exports = function generateSlip(formData, paymentData) {
         .lineWidth(2)
         .stroke('#1155cc');
 
+      // Finalize PDF file
       doc.end();
 
       writeStream.on('finish', () => resolve(slipPath));
