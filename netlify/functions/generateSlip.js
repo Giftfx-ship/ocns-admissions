@@ -1,71 +1,125 @@
-const PDFDocument = require('pdfkit');
+const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { v4: uuidv4 } = require('uuid');
+const busboy = require('busboy');
+const verifyPayment = require('./verifyPayment');
+const generateSlip = require('./generateSlip');
 
-module.exports = function generateSlip(formData, paymentData) {
-  return new Promise((resolve, reject) => {
-    try {
-      const slipPath = path.join('/tmp', `acknowledgment_${Date.now()}.pdf`);
-      const doc = new PDFDocument({ margin: 50 });
+exports.handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ success: false, error: 'Method Not Allowed' }),
+    };
+  }
 
-      const writeStream = fs.createWriteStream(slipPath);
-      doc.pipe(writeStream);
+  return new Promise((resolve) => {
+    const bb = busboy({ headers: event.headers });
+    const fields = {};
+    const files = {};
+    const tmpdir = os.tmpdir();
 
-      // Header background
-      doc.rect(0, 0, doc.page.width, 80).fill('#1155cc');
+    bb.on('file', (fieldname, file, filename) => {
+      const filepath = path.join(tmpdir, `${uuidv4()}-${filename}`);
+      file.pipe(fs.createWriteStream(filepath));
+      files[fieldname] = { path: filepath, filename };
+    });
 
-      // Logo
-      const logoPath = path.join(process.cwd(), 'images', 'logo.png');
-      if (fs.existsSync(logoPath)) {
-        doc.image(logoPath, 50, 15, { width: 50, height: 50 });
-      }
+    bb.on('field', (fieldname, value) => {
+      fields[fieldname] = value;
+    });
 
-      // Title
-      doc.fillColor('#ffffff')
-        .fontSize(20)
-        .text('Ogbomoso College of Nursing Science', 120, 25);
+    bb.on('finish', async () => {
+      try {
+        const reference = fields.paymentReference;
+        if (!reference) throw new Error("Missing payment reference");
 
-      doc.fillColor('#000000');
-      doc.moveDown(5);
+        const paymentData = await verifyPayment(reference);
+        const slipPath = await generateSlip(fields, paymentData);
 
-      doc.fontSize(16).text('Acknowledgment Slip', { align: 'center' });
-
-      doc.moveDown(2);
-      doc.fontSize(12)
-        .text(`Name: ${formData.fullname || `${formData.surname || ''} ${formData.othernames || ''}`}`)
-        .text(`Email: ${formData.email || 'N/A'}`)
-        .text(`Phone: ${formData.phone || 'N/A'}`)
-        .text(`Course: Basic Nursing`)
-        .text(`Payment Reference: ${paymentData.reference || 'N/A'}`)
-        .text(`Amount Paid: ₦${paymentData.amount ? (paymentData.amount / 100).toFixed(2) : '0.00'}`)
-        .text(`Payment Date: ${paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : 'N/A'}`);
-
-      doc.moveDown(2);
-      doc.text('Please bring this slip on the exam day.', { align: 'center' });
-
-      doc.moveDown(1);
-      doc.fillColor('#1155cc')
-        .fontSize(12)
-        .text('Join our Aspirant WhatsApp Group:', { align: 'center' });
-
-      doc.fillColor('blue')
-        .text('https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t', {
-          align: 'center',
-          link: 'https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t',
-          underline: true,
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: 'ogbomosocollegeofnursingscienc@gmail.com',
+            pass: process.env.GMAIL_APP_PASSWORD,
+          },
         });
 
-      // Border
-      doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40)
-        .lineWidth(2)
-        .stroke('#1155cc');
+        await transporter.sendMail({
+          from: 'ogbomosocollegeofnursingscienc@gmail.com',
+          to: 'ogbomosocollegeofnursingscienc@gmail.com',
+          subject: 'New Student Registration Submitted',
+          text: `
+A new student has submitted their application.
 
-      doc.end();
+--- Personal Info ---
+Surname: ${fields.surname}
+Other Names: ${fields.othernames}
+Gender: ${fields.gender}
+Marital Status: ${fields.marital_status}
+Date of Birth: ${fields.dob}
+Religion: ${fields.religion}
 
-      writeStream.on('finish', () => resolve(slipPath));
-      writeStream.on('error', (err) => reject(err));
-    } catch (error) {
-      reject(error);
-    }
+--- Contact ---
+Email: ${fields.email}
+Phone: ${fields.phone}
+Country: ${fields.country}
+State of Origin: ${fields.state_origin}
+State: ${fields.state}
+LGA: ${fields.lga}
+Home Town: ${fields.hometown}
+Address: ${fields.address}
+
+--- Sponsor Info ---
+Name: ${fields.sponsor_name}
+Relationship: ${fields.sponsor_relationship}
+Phone: ${fields.sponsor_phone}
+Address: ${fields.sponsor_address}
+
+--- Next of Kin ---
+Name: ${fields.nok_name}
+Relationship: ${fields.nok_relationship}
+Phone: ${fields.nok_phone}
+Address: ${fields.nok_address}
+
+--- Payment ---
+Reference: ${paymentData.reference}
+Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
+Date Paid: ${new Date(paymentData.paidAt).toLocaleString()}
+
+Attached: acknowledgment slip + uploaded files.
+          `,
+          attachments: [
+            { filename: 'acknowledgment_slip.pdf', path: slipPath },
+            ...(files.olevel ? [{ filename: files.olevel.filename, path: files.olevel.path }] : []),
+            ...(files.passport ? [{ filename: files.passport.filename, path: files.passport.path }] : []),
+          ],
+        });
+
+        // Clean up temp files
+        fs.unlinkSync(slipPath);
+        if (files.olevel) fs.unlinkSync(files.olevel.path);
+        if (files.passport) fs.unlinkSync(files.passport.path);
+
+        resolve({
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ success: true }),
+        });
+      } catch (err) {
+        // Return the actual error message back to frontend
+        resolve({
+          statusCode: 500,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ success: false, error: err.message, details: err.stack }),
+        });
+      }
+    });
+
+    const body = event.isBase64Encoded ? Buffer.from(event.body, "base64") : event.body;
+    bb.end(body);
   });
 };
