@@ -9,7 +9,11 @@ const generateSlip = require('./generateSlip');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ success: false, error: 'Method Not Allowed' }) };
+    return {
+      statusCode: 405,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ success: false, error: 'Method Not Allowed' })
+    };
   }
 
   return new Promise((resolve) => {
@@ -24,7 +28,9 @@ exports.handler = async (event) => {
       files[fieldname] = { path: filepath, filename };
     });
 
-    bb.on('field', (fieldname, value) => { fields[fieldname] = value; });
+    bb.on('field', (fieldname, value) => {
+      fields[fieldname] = value;
+    });
 
     bb.on('finish', async () => {
       try {
@@ -36,7 +42,10 @@ exports.handler = async (event) => {
 
         const transporter = nodemailer.createTransport({
           service: 'gmail',
-          auth: { user: 'ogbomosocollegeofnursingscienc@gmail.com', pass: process.env.GMAIL_APP_PASSWORD },
+          auth: {
+            user: 'ogbomosocollegeofnursingscienc@gmail.com',
+            pass: process.env.GMAIL_APP_PASSWORD
+          },
         });
 
         await transporter.sendMail({
@@ -90,14 +99,29 @@ Attached: acknowledgment slip + uploaded files.
           ]
         });
 
-        // Delete temporary files
+        // Cleanup
         fs.unlinkSync(slipPath);
         if (files.olevel) fs.unlinkSync(files.olevel.path);
         if (files.passport) fs.unlinkSync(files.passport.path);
 
-        resolve({ statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ success: true }) });
+        resolve({
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ success: true })
+        });
+
       } catch (err) {
-        resolve({ statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ success: false, error: err.message }) });
+        console.error("❌ Error inside sendEmail:", err);
+
+        resolve({
+          statusCode: 500,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            success: false,
+            error: err.message,
+            details: err.stack || err.toString()
+          })
+        });
       }
     });
 
