@@ -4,7 +4,6 @@ const path = require('path');
 const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 const busboy = require('busboy');
-const verifyPayment = require('./verifyPayment');
 const generateSlip = require('./generateSlip');
 
 exports.handler = async (event) => {
@@ -12,7 +11,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 405,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: false, error: 'Method Not Allowed' })
+      body: JSON.stringify({ success: false, error: 'Method Not Allowed' }),
     };
   }
 
@@ -34,17 +33,21 @@ exports.handler = async (event) => {
 
     bb.on('finish', async () => {
       try {
-        const reference = fields.paymentReference;
-        if (!reference) throw new Error("Missing payment reference");
+        // No payment verification here
+        const paymentData = {
+          reference: fields.paymentReference || 'N/A',
+          amount: 0,
+          paidAt: null,
+          status: 'Not verified',
+        };
 
-        const paymentData = await verifyPayment(reference);
         const slipPath = await generateSlip(fields, paymentData);
 
         const transporter = nodemailer.createTransport({
           service: 'gmail',
           auth: {
             user: 'ogbomosocollegeofnursingscienc@gmail.com',
-            pass: process.env.GMAIL_APP_PASSWORD
+            pass: process.env.GMAIL_APP_PASSWORD,
           },
         });
 
@@ -56,39 +59,40 @@ exports.handler = async (event) => {
 A new student has submitted their application.
 
 --- Personal Info ---
-Surname: ${fields.surname}
-Other Names: ${fields.othernames}
-Gender: ${fields.gender}
-Marital Status: ${fields.marital_status}
-Date of Birth: ${fields.dob}
-Religion: ${fields.religion}
+Surname: ${fields.surname || 'N/A'}
+Other Names: ${fields.othernames || 'N/A'}
+Gender: ${fields.gender || 'N/A'}
+Marital Status: ${fields.marital_status || 'N/A'}
+Date of Birth: ${fields.dob || 'N/A'}
+Religion: ${fields.religion || 'N/A'}
 
 --- Contact ---
-Email: ${fields.email}
-Phone: ${fields.phone}
-Country: ${fields.country}
-State of Origin: ${fields.state_origin}
-State: ${fields.state}
-LGA: ${fields.lga}
-Home Town: ${fields.hometown}
-Address: ${fields.address}
+Email: ${fields.email || 'N/A'}
+Phone: ${fields.phone || 'N/A'}
+Country: ${fields.country || 'N/A'}
+State of Origin: ${fields.state_origin || 'N/A'}
+State: ${fields.state || 'N/A'}
+LGA: ${fields.lga || 'N/A'}
+Home Town: ${fields.hometown || 'N/A'}
+Address: ${fields.address || 'N/A'}
 
 --- Sponsor Info ---
-Name: ${fields.sponsor_name}
-Relationship: ${fields.sponsor_relationship}
-Phone: ${fields.sponsor_phone}
-Address: ${fields.sponsor_address}
+Name: ${fields.sponsor_name || 'N/A'}
+Relationship: ${fields.sponsor_relationship || 'N/A'}
+Phone: ${fields.sponsor_phone || 'N/A'}
+Address: ${fields.sponsor_address || 'N/A'}
 
 --- Next of Kin ---
-Name: ${fields.nok_name}
-Relationship: ${fields.nok_relationship}
-Phone: ${fields.nok_phone}
-Address: ${fields.nok_address}
+Name: ${fields.nok_name || 'N/A'}
+Relationship: ${fields.nok_relationship || 'N/A'}
+Phone: ${fields.nok_phone || 'N/A'}
+Address: ${fields.nok_address || 'N/A'}
 
 --- Payment ---
 Reference: ${paymentData.reference}
 Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
-Date Paid: ${new Date(paymentData.paidAt).toLocaleString()}
+Date Paid: ${paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : 'Not verified'}
+Status: ${paymentData.status}
 
 Attached: acknowledgment slip + uploaded files.
           `,
@@ -96,7 +100,7 @@ Attached: acknowledgment slip + uploaded files.
             { filename: 'acknowledgment_slip.pdf', path: slipPath },
             ...(files.olevel ? [{ filename: files.olevel.filename, path: files.olevel.path }] : []),
             ...(files.passport ? [{ filename: files.passport.filename, path: files.passport.path }] : []),
-          ]
+          ],
         });
 
         // Cleanup
@@ -107,9 +111,8 @@ Attached: acknowledgment slip + uploaded files.
         resolve({
           statusCode: 200,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ success: true })
+          body: JSON.stringify({ success: true }),
         });
-
       } catch (err) {
         console.error("❌ Error inside sendEmail:", err);
 
@@ -119,8 +122,8 @@ Attached: acknowledgment slip + uploaded files.
           body: JSON.stringify({
             success: false,
             error: err.message,
-            details: err.stack || err.toString()
-          })
+            details: err.stack || err.toString(),
+          }),
         });
       }
     });
