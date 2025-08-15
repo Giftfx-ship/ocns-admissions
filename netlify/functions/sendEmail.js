@@ -21,10 +21,26 @@ exports.handler = async (event) => {
     const files = {};
     const tmpdir = os.tmpdir();
 
+    // Collect all file write promises here
+    const fileWritePromises = [];
+
     bb.on('file', (fieldname, file, filename) => {
       const filepath = path.join(tmpdir, `${uuidv4()}-${filename}`);
-      file.pipe(fs.createWriteStream(filepath));
-      files[fieldname] = { path: filepath, filename };
+
+      const writePromise = new Promise((fileResolve, fileReject) => {
+        const writeStream = fs.createWriteStream(filepath);
+        file.pipe(writeStream);
+        writeStream.on('finish', () => {
+          files[fieldname] = { path: filepath, filename };
+          fileResolve();
+        });
+        writeStream.on('error', (err) => {
+          console.error("Error writing file:", err);
+          fileReject(err);
+        });
+      });
+
+      fileWritePromises.push(writePromise);
     });
 
     bb.on('field', (fieldname, value) => {
@@ -33,6 +49,13 @@ exports.handler = async (event) => {
 
     bb.on('finish', async () => {
       try {
+        // Wait for all file writes to complete
+        await Promise.all(fileWritePromises);
+
+        // Debug logs
+        console.log("Fields:", fields);
+        console.log("Files:", files);
+
         // No payment verification here
         const paymentData = {
           reference: fields.paymentReference || 'N/A',
@@ -50,6 +73,18 @@ exports.handler = async (event) => {
             pass: process.env.GMAIL_APP_PASSWORD,
           },
         });
+
+        const attachments = [
+          { filename: 'acknowledgment_slip.pdf', path: slipPath },
+        ];
+
+        // Only attach if path is a string (valid file)
+        if (files.olevel && typeof files.olevel.path === 'string') {
+          attachments.push({ filename: files.olevel.filename, path: files.olevel.path });
+        }
+        if (files.passport && typeof files.passport.path === 'string') {
+          attachments.push({ filename: files.passport.filename, path: files.passport.path });
+        }
 
         await transporter.sendMail({
           from: 'ogbomosocollegeofnursingscienc@gmail.com',
@@ -96,17 +131,13 @@ Status: ${paymentData.status}
 
 Attached: acknowledgment slip + uploaded files.
           `,
-          attachments: [
-            { filename: 'acknowledgment_slip.pdf', path: slipPath },
-            ...(files.olevel ? [{ filename: files.olevel.filename, path: files.olevel.path }] : []),
-            ...(files.passport ? [{ filename: files.passport.filename, path: files.passport.path }] : []),
-          ],
+          attachments,
         });
 
         // Cleanup
         fs.unlinkSync(slipPath);
-        if (files.olevel) fs.unlinkSync(files.olevel.path);
-        if (files.passport) fs.unlinkSync(files.passport.path);
+        if (files.olevel && typeof files.olevel.path === 'string') fs.unlinkSync(files.olevel.path);
+        if (files.passport && typeof files.passport.path === 'string') fs.unlinkSync(files.passport.path);
 
         resolve({
           statusCode: 200,
