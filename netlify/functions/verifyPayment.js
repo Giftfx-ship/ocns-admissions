@@ -3,33 +3,27 @@ const axios = require("axios");
 module.exports = async function verifyPayment(reference) {
   try {
     const secretKey = process.env.PAYSTACK_SECRET_KEY;
-
     if (!secretKey) {
-      console.error("❌ Missing PAYSTACK_SECRET_KEY in environment variables.");
+      console.error("Paystack Secret Key missing!");
       throw new Error("Paystack Secret Key missing");
     }
 
-    if (!reference) {
-      console.error("❌ No payment reference provided.");
-      throw new Error("Missing payment reference");
-    }
-
-    console.log("🔍 Verifying payment for reference:", reference);
+    console.log(`Verifying payment for reference: ${reference}`);
 
     const res = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
-      headers: {
-        Authorization: `Bearer ${secretKey}`,
-        "Content-Type": "application/json"
-      }
+      headers: { Authorization: `Bearer ${secretKey}` },
     });
 
-    console.log("✅ Received response from Paystack:", res.data);
+    console.log("Paystack response data:", res.data);
 
-    const paymentStatus = res.data?.data?.status;
+    if (!res.data.status) {
+      console.error("Paystack verification status false");
+      throw new Error("Payment verification failed: status false");
+    }
 
-    if (!res.data.status || paymentStatus !== "success") {
-      console.error("❌ Payment verification failed. Status:", paymentStatus);
-      throw new Error("Payment verification failed");
+    if (res.data.data.status !== "success") {
+      console.error(`Payment status is not success: ${res.data.data.status}`);
+      throw new Error(`Payment not successful: ${res.data.data.status}`);
     }
 
     return {
@@ -38,15 +32,8 @@ module.exports = async function verifyPayment(reference) {
       paidAt: res.data.data.paid_at,
       status: res.data.data.status,
     };
-
   } catch (err) {
-    // Log the actual error returned by Paystack or Axios
-    if (err.response) {
-      console.error("❌ Paystack API error:", err.response.data);
-    } else {
-      console.error("❌ General error verifying payment:", err.message);
-    }
-
-    throw new Error("Unable to verify payment");
+    console.error("Error verifying payment:", err.message);
+    throw new Error("Unable to verify payment: " + err.message);
   }
 };
