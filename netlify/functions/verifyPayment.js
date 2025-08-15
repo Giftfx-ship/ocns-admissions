@@ -3,35 +3,41 @@ const axios = require("axios");
 module.exports = async function verifyPayment(reference) {
   try {
     const secretKey = process.env.PAYSTACK_SECRET_KEY;
+
     if (!secretKey) {
-      console.error("❌ Missing Paystack Secret Key");
+      console.error("❌ Missing PAYSTACK_SECRET_KEY environment variable");
       throw new Error("Missing Paystack Secret Key");
     }
 
     console.log("🔍 Verifying payment with reference:", reference);
 
-    const res = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
-      headers: { Authorization: `Bearer ${secretKey}` },
+    const response = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        'Content-Type': 'application/json',
+      },
     });
 
-    console.log("✅ Paystack API response:", res.data);
+    console.log("✅ Paystack response:", JSON.stringify(response.data, null, 2));
 
-    if (!res.data.status) {
-      throw new Error(`Paystack verification failed: ${res.data.message}`);
+    const data = response.data;
+
+    if (!data.status) {
+      throw new Error(`Paystack verification failed: ${data.message || 'Unknown error'}`);
     }
 
-    if (res.data.data.status !== "success") {
-      throw new Error(`Payment not successful: ${res.data.data.status}`);
+    if (data.data.status !== "success") {
+      throw new Error(`Payment not successful: ${data.data.status}`);
     }
 
     return {
-      reference: res.data.data.reference,
-      amount: res.data.data.amount,
-      paidAt: res.data.data.paid_at,
-      status: res.data.data.status,
+      reference: data.data.reference,
+      amount: data.data.amount,
+      paidAt: data.data.paid_at,
+      status: data.data.status,
     };
   } catch (err) {
-    console.error("❌ Error verifying payment:", err.message);
-    throw new Error("Unable to verify payment: " + err.message);
+    console.error("❌ Error verifying payment:", err.message || err.toString());
+    throw new Error("Unable to verify payment: " + (err.message || "Unknown error"));
   }
 };
