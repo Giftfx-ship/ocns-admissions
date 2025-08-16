@@ -80,8 +80,8 @@ Status: ${paymentData.status}
 
   // Send to Admin
   await resend.emails.send({
-    from: "Ogbomoso College <no-reply@yourdomain.com>",
-    to: "ogbomosocollegeofnursingsc@gmail.com", // admin email
+    from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
+    to: "ogbomosocollegeofnursingscienc@gmail.com", // admin email
     subject: "📩 New Student Registration Submitted",
     text: adminBody,
     attachments,
@@ -107,7 +107,7 @@ Ogbomoso College of Nursing Science Admissions Team
     `;
 
     await resend.emails.send({
-      from: "Ogbomoso College <no-reply@yourdomain.com>",
+      from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: fields.email,
       subject: "✅ Application Received - Ogbomoso College of Nursing Science",
       text: studentBody,
