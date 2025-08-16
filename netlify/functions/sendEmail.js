@@ -1,171 +1,109 @@
-const nodemailer = require('nodemailer');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { v4: uuidv4 } = require('uuid');
-const busboy = require('busboy');
-const generateSlip = require('./generateSlip');
+const fs = require("fs");
+const path = require("path");
+const { Resend } = require("resend");
 
-exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ success: false, error: 'Method Not Allowed' }),
-    };
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+async function sendApplicationEmails(fields, paymentData, slipPath, files) {
+  const getSingleFile = (fileField) =>
+    Array.isArray(fileField) ? fileField[0] : fileField;
+  const olevelFile = getSingleFile(files.olevel);
+  const passportFile = getSingleFile(files.passport);
+
+  // Prepare attachments (base64 required for Resend)
+  const attachments = [
+    {
+      filename: "acknowledgment_slip.pdf",
+      content: fs.readFileSync(slipPath).toString("base64"),
+    },
+  ];
+  if (olevelFile) {
+    attachments.push({
+      filename: olevelFile.filename,
+      content: fs.readFileSync(olevelFile.path).toString("base64"),
+    });
+  }
+  if (passportFile) {
+    attachments.push({
+      filename: passportFile.filename,
+      content: fs.readFileSync(passportFile.path).toString("base64"),
+    });
   }
 
-  return new Promise((resolve) => {
-    const bb = busboy({ headers: event.headers });
-    const fields = {};
-    const files = {};
-    const tmpdir = os.tmpdir();
-    const fileWritePromises = [];
+  // Email body with all fields
+  const emailBody = `
+--- Personal Info ---
+Surname: ${fields.surname || "N/A"}
+Other Names: ${fields.othernames || "N/A"}
+Gender: ${fields.gender || "N/A"}
+Marital Status: ${fields.marital_status || "N/A"}
+Date of Birth: ${fields.dob || "N/A"}
+Religion: ${fields.religion || "N/A"}
 
-    bb.on('file', (fieldname, file, filename) => {
-      const filepath = path.join(tmpdir, `${uuidv4()}-${filename}`);
-      const writePromise = new Promise((fileResolve, fileReject) => {
-        const writeStream = fs.createWriteStream(filepath);
-        file.pipe(writeStream);
-        writeStream.on('finish', () => {
-          const fileData = { path: filepath, filename };
-          if (files[fieldname]) {
-            if (Array.isArray(files[fieldname])) {
-              files[fieldname].push(fileData);
-            } else {
-              files[fieldname] = [files[fieldname], fileData];
-            }
-          } else {
-            files[fieldname] = fileData;
-          }
-          fileResolve();
-        });
-        writeStream.on('error', fileReject);
-      });
-      fileWritePromises.push(writePromise);
-    });
+--- Contact ---
+Email: ${fields.email || "N/A"}
+Phone: ${fields.phone || "N/A"}
+Country: ${fields.country || "N/A"}
+State of Origin: ${fields.state_origin || "N/A"}
+State: ${fields.state || "N/A"}
+LGA: ${fields.lga || "N/A"}
+Home Town: ${fields.hometown || "N/A"}
+Address: ${fields.address || "N/A"}
 
-    bb.on('field', (fieldname, value) => {
-      fields[fieldname] = value;
-    });
+--- Sponsor Info ---
+Name: ${fields.sponsor_name || "N/A"}
+Relationship: ${fields.sponsor_relationship || "N/A"}
+Phone: ${fields.sponsor_phone || "N/A"}
+Address: ${fields.sponsor_address || "N/A"}
 
-    bb.on('finish', async () => {
-      try {
-        await Promise.all(fileWritePromises);
+--- Next of Kin ---
+Name: ${fields.nok_name || "N/A"}
+Relationship: ${fields.nok_relationship || "N/A"}
+Phone: ${fields.nok_phone || "N/A"}
+Address: ${fields.nok_address || "N/A"}
 
-        // Payment data (for now not verified yet)
-        const paymentData = {
-          reference: fields.paymentReference || 'N/A',
-          amount: 0,
-          paidAt: null,
-          status: 'Not verified',
-        };
+--- Payment ---
+Reference: ${paymentData.reference}
+Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
+Date Paid: ${
+    paymentData.paidAt
+      ? new Date(paymentData.paidAt).toLocaleString()
+      : "N/A"
+  }
+Status: ${paymentData.status}
+  `;
 
-        // Generate acknowledgment slip
-        const slipPath = await generateSlip(fields, paymentData);
-
-        const getSingleFile = (fileField) => Array.isArray(fileField) ? fileField[0] : fileField;
-        const olevelFile = getSingleFile(files.olevel);
-        const passportFile = getSingleFile(files.passport);
-
-        // Setup mail transporter
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: process.env.GMAIL_USER,
-            pass: process.env.GMAIL_APP_PASSWORD,
-          },
-        });
-
-        // Attachments
-        const attachments = [{ filename: 'acknowledgment_slip.pdf', path: slipPath }];
-        if (olevelFile) attachments.push({ filename: olevelFile.filename, path: olevelFile.path });
-        if (passportFile) attachments.push({ filename: passportFile.filename, path: passportFile.path });
-
-        // ================= ADMIN MAIL =================
-        await transporter.sendMail({
-          from: process.env.GMAIL_USER,
-          to: 'ogbomosocollegeofnursingsc@gmail.com',
-          subject: 'New Student Registration Submitted',
-          text: `
-A new student has submitted their application.
-
-‎--- Personal Info ---
-‎Surname: ${fields.surname}
-‎Other Names: ${fields.othernames}
-‎Gender: ${fields.gender}
-‎Marital Status: ${fields.marital_status}
-‎Date of Birth: ${fields.dob}
-‎Religion: ${fields.religion}
-‎
-‎--- Contact ---
-‎Email: ${fields.email}
-‎Phone: ${fields.phone}
-‎Country: ${fields.country}
-‎State of Origin: ${fields.state_origin}
-‎State: ${fields.state}
-‎LGA: ${fields.lga}
-‎Home Town: ${fields.hometown}
-‎Address: ${fields.address}
-‎
-‎--- Sponsor Info ---
-‎Name: ${fields.sponsor_name}
-‎Relationship: ${fields.sponsor_relationship}
-‎Phone: ${fields.sponsor_phone}
-‎Address: ${fields.sponsor_address}
-‎
-‎--- Next of Kin ---
-‎Name: ${fields.nok_name}
-‎Relationship: ${fields.nok_relationship}
-‎Phone: ${fields.nok_phone}
-‎Address: ${fields.nok_address}
-‎
-‎
-‎Reference: ${paymentData.reference}
-‎Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
-‎Date Paid: ${new Date(paymentData.paidAt).toLocaleString()}
-Attached: acknowledgment slip + uploaded files.
-          `,
-          attachments,
-        });
-
-        // ================= STUDENT MAIL =================
-        if (fields.email) {
-          await transporter.sendMail({
-            from: process.env.GMAIL_USER,
-            to: fields.email,
-            subject: 'Your Application was Received',
-            text: `
-Dear ${fields.surname || ''} ${fields.othernames || ''},
-
-Your application has been received successfully.  
-
-Please find attached your acknowledgment slip and uploaded documents.  
-
-Thank you,  
-Ogbomoso College of Nursing
-            `,
-            attachments,
-          });
-        }
-
-        // Cleanup temp files
-        fs.unlinkSync(slipPath);
-        if (olevelFile) fs.unlinkSync(olevelFile.path);
-        if (passportFile) fs.unlinkSync(passportFile.path);
-
-        resolve({
-          statusCode: 200,
-          body: JSON.stringify({ success: true }),
-        });
-      } catch (err) {
-        resolve({
-          statusCode: 500,
-          body: JSON.stringify({ success: false, error: err.message }),
-        });
-      }
-    });
-
-    const body = event.isBase64Encoded ? Buffer.from(event.body, 'base64') : event.body;
-    bb.end(body);
+  // Send to Admin
+  await resend.emails.send({
+    from: "Ogbomoso College <no-reply@yourdomain.com>",
+    to: "ogbomosocollegeofnursingsc@gmail.com", // admin email
+    subject: "📩 New Student Registration Submitted",
+    text: emailBody,
+    attachments,
   });
-};
+
+  // Send confirmation to student
+  if (fields.email) {
+    await resend.emails.send({
+      from: "Ogbomoso College <no-reply@yourdomain.com>",
+      to: fields.email,
+      subject: "✅ Your Application Was Received",
+      text: `Dear ${fields.surname},\n\nYour application has been successfully submitted.\n\nPlease find your acknowledgment slip attached.\n\nThank you.`,
+      attachments: [
+        {
+          filename: "acknowledgment_slip.pdf",
+          content: fs.readFileSync(slipPath).toString("base64"),
+        },
+      ],
+    });
+  }
+
+  // Cleanup temp files
+  fs.unlinkSync(slipPath);
+  if (olevelFile) fs.unlinkSync(olevelFile.path);
+  if (passportFile) fs.unlinkSync(passportFile.path);
+
+  return true;
+}
+
+module.exports = sendApplicationEmails;
