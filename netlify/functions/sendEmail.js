@@ -1,3 +1,4 @@
+// sendEmail.js (Netlify Function in /.netlify/functions/)
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
@@ -20,11 +21,14 @@ exports.handler = async (event) => {
     const fields = {};
     const files = {};
     const tmpdir = os.tmpdir();
-
-    // Collect all file write promises here
     const fileWritePromises = [];
 
-    bb.on('file', (fieldname, file, filename) => {
+    // ✅ FIX: support both old & new busboy signatures
+    bb.on('file', (fieldname, file, infoOrFilename) => {
+      const filename = typeof infoOrFilename === 'string'
+        ? infoOrFilename
+        : (infoOrFilename && infoOrFilename.filename) || `upload-${Date.now()}`;
+
       const filepath = path.join(tmpdir, `${uuidv4()}-${filename}`);
 
       const writePromise = new Promise((fileResolve, fileReject) => {
@@ -32,23 +36,15 @@ exports.handler = async (event) => {
         file.pipe(writeStream);
         writeStream.on('finish', () => {
           const fileData = { path: filepath, filename };
-
-          // Handle multiple files per field by storing as array
           if (files[fieldname]) {
-            if (Array.isArray(files[fieldname])) {
-              files[fieldname].push(fileData);
-            } else {
-              files[fieldname] = [files[fieldname], fileData];
-            }
+            if (Array.isArray(files[fieldname])) files[fieldname].push(fileData);
+            else files[fieldname] = [files[fieldname], fileData];
           } else {
             files[fieldname] = fileData;
           }
           fileResolve();
         });
-        writeStream.on('error', (err) => {
-          console.error("Error writing file:", err);
-          fileReject(err);
-        });
+        writeStream.on('error', (err) => fileReject(err));
       });
 
       fileWritePromises.push(writePromise);
@@ -60,14 +56,9 @@ exports.handler = async (event) => {
 
     bb.on('finish', async () => {
       try {
-        // Wait for all file writes to complete
         await Promise.all(fileWritePromises);
 
-        // Debug logs
-        console.log("Fields:", fields);
-        console.log("Files:", files);
-
-        // No payment verification here
+        // Minimal payment summary (you can verify with Paystack server-side if you want)
         const paymentData = {
           reference: fields.paymentReference || 'N/A',
           amount: 0,
@@ -75,22 +66,21 @@ exports.handler = async (event) => {
           status: 'Not verified',
         };
 
+        // Generate slip (with logo)
         const slipPath = await generateSlip(fields, paymentData);
 
-        // Helper to get single file if multiple uploaded accidentally
-        const getSingleFile = (fileField) => {
-          if (Array.isArray(fileField)) return fileField[0];
-          return fileField;
-        };
+        // Helper to normalize single/multiple upload fields
+        const getSingleFile = (fileField) => Array.isArray(fileField) ? fileField[0] : fileField;
 
         const olevelFile = getSingleFile(files.olevel);
         const passportFile = getSingleFile(files.passport);
 
+        // Configure nodemailer (Gmail app password must be set as env var)
         const transporter = nodemailer.createTransport({
           service: 'gmail',
           auth: {
             user: 'ogbomosocollegeofnursingscienc@gmail.com',
-            pass: process.env.GMAIL_APP_PASSWORD,
+            pass: process.env.GMAIL_APP_PASSWORD, // set in Netlify env
           },
         });
 
@@ -105,6 +95,7 @@ exports.handler = async (event) => {
           attachments.push({ filename: passportFile.filename, path: passportFile.path });
         }
 
+        // Send to admin (same as your original)
         await transporter.sendMail({
           from: 'ogbomosocollegeofnursingscienc@gmail.com',
           to: 'ogbomosocollegeofnursingscienc@gmail.com',
@@ -154,9 +145,10 @@ Attached: acknowledgment slip + uploaded files.
         });
 
         // Cleanup temp files
-        fs.unlinkSync(slipPath);
-        if (olevelFile && typeof olevelFile.path === 'string') fs.unlinkSync(olevelFile.path);
-        if (passportFile && typeof passportFile.path === 'string') fs.unlinkSync(passportFile.path);
+        const clean = (f) => { try { fs.unlinkSync(f); } catch {} };
+        clean(slipPath);
+        if (olevelFile && typeof olevelFile.path === 'string') clean(olevelFile.path);
+        if (passportFile && typeof passportFile.path === 'string') clean(passportFile.path);
 
         resolve({
           statusCode: 200,
@@ -165,14 +157,13 @@ Attached: acknowledgment slip + uploaded files.
         });
       } catch (err) {
         console.error("❌ Error inside sendEmail:", err);
-
         resolve({
           statusCode: 500,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             success: false,
             error: err.message,
-            details: err.stack || err.toString(),
+            details: err.stack || String(err),
           }),
         });
       }
