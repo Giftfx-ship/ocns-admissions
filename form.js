@@ -1,54 +1,60 @@
-const express = require('express');
-const router = express.Router();
-const fetch = require('node-fetch'); // For Paystack verification if needed
-const FormData = require('form-data');
-const fs = require('fs');
-const path = require('path');
-const sendEmail = require('../netlify/functions/sendEmail'); // Adjust path if needed
-
-// Example route: POST /submit
-router.post('/submit', async (req, res) => {
-  try {
-    const formData = req.body;
-
-    // Optional: Verify Paystack payment (skip if testing)
-    // const paystackSecret = process.env.PAYSTACK_SECRET;
-    // const reference = formData.paymentReference;
-    // const verifyRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-    //   headers: { Authorization: `Bearer ${paystackSecret}` },
-    // });
-    // const payData = await verifyRes.json();
-    // if (!payData.status) throw new Error('Payment verification failed');
-
-    // Simulate payment data if testing without Paystack
-    const paymentData = {
-      reference: formData.paymentReference || `TEST-${Date.now()}`,
-      amount: formData.amount || 15000,
-      paidAt: new Date(),
-      status: 'success',
-    };
-
-    // Prepare a fake event object like Netlify function receives
-    const event = {
-      httpMethod: 'POST',
-      headers: { 'content-type': 'multipart/form-data' },
-      body: req.body, // if using file uploads, you may need to handle base64
-      isBase64Encoded: false,
-    };
-
-    // Call sendEmail function
-    const emailResult = await sendEmail.handler(event);
-    const resultBody = JSON.parse(emailResult.body);
-
-    if (resultBody.success) {
-      res.status(200).json({ message: 'Application submitted successfully! Check your email.' });
-    } else {
-      res.status(500).json({ message: 'Submission failed', error: resultBody.error });
-    }
-  } catch (error) {
-    console.error('Form submission error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-module.exports = router;
+‎// form.js
+‎document.addEventListener("DOMContentLoaded", function () {
+‎  const form = document.getElementById("admissionForm");
+‎  const formMessage = document.getElementById("formMessage");
+‎
+‎  form.addEventListener("submit", function (e) {
+‎    e.preventDefault();
+‎
+‎    const formData = new FormData(form);
+‎
+‎    if (!formData.get("confirm")) {
+‎      alert("Please confirm that all information is correct.");
+‎      return;
+‎    }
+‎
+‎    const email = formData.get("email");
+‎    const amount = 100 * 100; // ₦100 for testing
+‎
+‎    formMessage.textContent = "Processing payment...";
+‎    formMessage.style.color = "blue";
+‎
+‎    const handler = PaystackPop.setup({
+‎      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27",
+‎      email,
+‎      amount,
+‎      currency: "NGN",
+‎      callback: function (response) {
+‎        formMessage.textContent = "Payment successful! Sending your application...";
+‎        formData.append("paymentReference", response.reference);
+‎
+‎        fetch("/.netlify/functions/sendEmail", {
+‎          method: "POST",
+‎          body: formData, // multipart/form-data (browser sets boundary)
+‎        })
+‎          .then(async (res) => {
+‎            let data;
+‎            try { data = await res.json(); } catch { throw new Error("Server response not JSON"); }
+‎            if (data.success) {
+‎              formMessage.style.color = "green";
+‎              formMessage.textContent = "Application submitted successfully! Check your email.";
+‎              form.reset();
+‎            } else {
+‎              throw new Error(data.error || "Submission failed.");
+‎            }
+‎          })
+‎          .catch(err => {
+‎            formMessage.style.color = "red";
+‎            formMessage.textContent = "Error submitting form: " + err.message;
+‎          });
+‎      },
+‎      onClose: function () {
+‎        formMessage.style.color = "red";
+‎        formMessage.textContent = "Payment cancelled.";
+‎      }
+‎    });
+‎
+‎    handler.openIframe();
+‎  });
+‎});
+‎
