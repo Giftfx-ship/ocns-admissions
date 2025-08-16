@@ -7,6 +7,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 async function sendApplicationEmails(fields, paymentData, slipPath, files) {
   const getSingleFile = (fileField) =>
     Array.isArray(fileField) ? fileField[0] : fileField;
+
   const olevelFile = getSingleFile(files.olevel);
   const passportFile = getSingleFile(files.passport);
 
@@ -19,19 +20,23 @@ async function sendApplicationEmails(fields, paymentData, slipPath, files) {
   ];
   if (olevelFile) {
     attachments.push({
-      filename: olevelFile.filename,
+      filename: olevelFile.filename || "olevel_result.pdf",
       content: fs.readFileSync(olevelFile.path).toString("base64"),
     });
   }
   if (passportFile) {
     attachments.push({
-      filename: passportFile.filename,
+      filename: passportFile.filename || "passport.jpg",
       content: fs.readFileSync(passportFile.path).toString("base64"),
     });
   }
 
-  // Email body with all fields
-  const emailBody = `
+  // Admin email body (detailed)
+  const adminBody = `
+==============================
+   📩 NEW STUDENT APPLICATION
+==============================
+
 --- Personal Info ---
 Surname: ${fields.surname || "N/A"}
 Other Names: ${fields.othernames || "N/A"}
@@ -62,7 +67,7 @@ Relationship: ${fields.nok_relationship || "N/A"}
 Phone: ${fields.nok_phone || "N/A"}
 Address: ${fields.nok_address || "N/A"}
 
---- Payment ---
+--- Payment Details ---
 Reference: ${paymentData.reference}
 Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
 Date Paid: ${
@@ -78,17 +83,34 @@ Status: ${paymentData.status}
     from: "Ogbomoso College <no-reply@yourdomain.com>",
     to: "ogbomosocollegeofnursingsc@gmail.com", // admin email
     subject: "📩 New Student Registration Submitted",
-    text: emailBody,
+    text: adminBody,
     attachments,
   });
 
-  // Send confirmation to student
+  // Student confirmation (short + polite)
   if (fields.email) {
+    const studentBody = `
+Dear ${fields.surname || "Applicant"},
+
+Thank you for applying to **Ogbomoso College of Nursing Science**.
+
+✅ Your application has been successfully received.  
+📎 Please find attached your **Acknowledgment Slip**.  
+
+You are required to print this slip and bring it along on the examination day.  
+If you uploaded your O'level and Passport, they have been securely received.
+
+We wish you success in your admission process.  
+
+Best Regards,  
+Ogbomoso College of Nursing Science Admissions Team
+    `;
+
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@yourdomain.com>",
       to: fields.email,
-      subject: "✅ Your Application Was Received",
-      text: `Dear ${fields.surname},\n\nYour application has been successfully submitted.\n\nPlease find your acknowledgment slip attached.\n\nThank you.`,
+      subject: "✅ Application Received - Ogbomoso College of Nursing Science",
+      text: studentBody,
       attachments: [
         {
           filename: "acknowledgment_slip.pdf",
@@ -99,9 +121,13 @@ Status: ${paymentData.status}
   }
 
   // Cleanup temp files
-  fs.unlinkSync(slipPath);
-  if (olevelFile) fs.unlinkSync(olevelFile.path);
-  if (passportFile) fs.unlinkSync(passportFile.path);
+  try {
+    fs.unlinkSync(slipPath);
+    if (olevelFile) fs.unlinkSync(olevelFile.path);
+    if (passportFile) fs.unlinkSync(passportFile.path);
+  } catch (err) {
+    console.warn("⚠️ Cleanup skipped:", err.message);
+  }
 
   return true;
 }
