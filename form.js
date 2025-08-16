@@ -1,3 +1,4 @@
+// form.js
 document.addEventListener("DOMContentLoaded", function () {
   const form = document.getElementById("admissionForm");
   const formMessage = document.getElementById("formMessage");
@@ -19,9 +20,9 @@ document.addEventListener("DOMContentLoaded", function () {
     formMessage.style.color = "blue";
 
     const handler = PaystackPop.setup({
-      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27", // your public key
-      email: email,
-      amount: amount,
+      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27",
+      email,
+      amount,
       currency: "NGN",
       callback: function (response) {
         formMessage.textContent = "Payment successful! Sending your application...";
@@ -29,10 +30,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         fetch("/.netlify/functions/sendEmail", {
           method: "POST",
-          body: formData,
+          body: formData, // multipart/form-data (browser sets boundary)
         })
-          .then(res => res.json())
-          .then(data => {
+          .then(async (res) => {
+            let data;
+            try { data = await res.json(); } catch { throw new Error("Server response not JSON"); }
             if (data.success) {
               formMessage.style.color = "green";
               formMessage.textContent = "Application submitted successfully! Check your email.";
