@@ -52,6 +52,7 @@ exports.handler = async (event) => {
       try {
         await Promise.all(fileWritePromises);
 
+        // Payment data (for now not verified yet)
         const paymentData = {
           reference: fields.paymentReference || 'N/A',
           amount: 0,
@@ -59,12 +60,14 @@ exports.handler = async (event) => {
           status: 'Not verified',
         };
 
+        // Generate acknowledgment slip
         const slipPath = await generateSlip(fields, paymentData);
 
         const getSingleFile = (fileField) => Array.isArray(fileField) ? fileField[0] : fileField;
         const olevelFile = getSingleFile(files.olevel);
         const passportFile = getSingleFile(files.passport);
 
+        // Setup mail transporter
         const transporter = nodemailer.createTransport({
           service: 'gmail',
           auth: {
@@ -73,10 +76,12 @@ exports.handler = async (event) => {
           },
         });
 
+        // Attachments
         const attachments = [{ filename: 'acknowledgment_slip.pdf', path: slipPath }];
         if (olevelFile) attachments.push({ filename: olevelFile.filename, path: olevelFile.path });
         if (passportFile) attachments.push({ filename: passportFile.filename, path: passportFile.path });
 
+        // ================= ADMIN MAIL =================
         await transporter.sendMail({
           from: process.env.GMAIL_USER,
           to: 'ogbomosocollegeofnursingsc@gmail.com',
@@ -84,23 +89,64 @@ exports.handler = async (event) => {
           text: `
 A new student has submitted their application.
 
---- Personal Info ---
-Surname: ${fields.surname || 'N/A'}
-Other Names: ${fields.othernames || 'N/A'}
-Gender: ${fields.gender || 'N/A'}
-Date of Birth: ${fields.dob || 'N/A'}
-Email: ${fields.email || 'N/A'}
-Phone: ${fields.phone || 'N/A'}
-
---- Payment ---
-Reference: ${paymentData.reference}
-Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
-Status: ${paymentData.status}
-
+‎--- Personal Info ---
+‎Surname: ${fields.surname}
+‎Other Names: ${fields.othernames}
+‎Gender: ${fields.gender}
+‎Marital Status: ${fields.marital_status}
+‎Date of Birth: ${fields.dob}
+‎Religion: ${fields.religion}
+‎
+‎--- Contact ---
+‎Email: ${fields.email}
+‎Phone: ${fields.phone}
+‎Country: ${fields.country}
+‎State of Origin: ${fields.state_origin}
+‎State: ${fields.state}
+‎LGA: ${fields.lga}
+‎Home Town: ${fields.hometown}
+‎Address: ${fields.address}
+‎
+‎--- Sponsor Info ---
+‎Name: ${fields.sponsor_name}
+‎Relationship: ${fields.sponsor_relationship}
+‎Phone: ${fields.sponsor_phone}
+‎Address: ${fields.sponsor_address}
+‎
+‎--- Next of Kin ---
+‎Name: ${fields.nok_name}
+‎Relationship: ${fields.nok_relationship}
+‎Phone: ${fields.nok_phone}
+‎Address: ${fields.nok_address}
+‎
+‎
+‎Reference: ${paymentData.reference}
+‎Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
+‎Date Paid: ${new Date(paymentData.paidAt).toLocaleString()}
 Attached: acknowledgment slip + uploaded files.
           `,
           attachments,
         });
+
+        // ================= STUDENT MAIL =================
+        if (fields.email) {
+          await transporter.sendMail({
+            from: process.env.GMAIL_USER,
+            to: fields.email,
+            subject: 'Your Application was Received',
+            text: `
+Dear ${fields.surname || ''} ${fields.othernames || ''},
+
+Your application has been received successfully.  
+
+Please find attached your acknowledgment slip and uploaded documents.  
+
+Thank you,  
+Ogbomoso College of Nursing
+            `,
+            attachments,
+          });
+        }
 
         // Cleanup temp files
         fs.unlinkSync(slipPath);
