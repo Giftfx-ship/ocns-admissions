@@ -10,27 +10,20 @@ export async function handler(event, context) {
       return { statusCode: 405, body: "Method Not Allowed" };
     }
 
-    // Use FormData-style parsing
-    const formData = await event.body; // Netlify passes form data as string
-    const params = new URLSearchParams(formData);
-
-    // Extract all fields
-    const fields = {};
-    for (const [key, value] of params.entries()) {
-      fields[key] = value;
-    }
+    // Parse JSON body (frontend sends JSON)
+    const fields = JSON.parse(event.body);
 
     const paymentData = {
       reference: fields.paymentReference || "N/A",
-      amount: 16000 * 100, // ₦16,000 in kobo
+      amount: 16000 * 100,
       status: "success",
       paidAt: new Date().toISOString(),
     };
 
-    // Generate PDF slip
+    // Generate PDF acknowledgment slip
     const slipBase64 = await generateSlip(fields, paymentData);
 
-    // --- Send to Admin ---
+    // --- Admin email ---
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -81,12 +74,13 @@ Status: ${paymentData.status}
             {
               filename: "acknowledgment_slip.pdf",
               content: slipBase64,
+              encoding: "base64",
             },
           ]
         : [],
     });
 
-    // --- Send to Student ---
+    // --- Student email ---
     if (fields.email && slipBase64) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
@@ -101,7 +95,7 @@ Join the aspirant group here: https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppM
 
 Best regards,  
 OCNS Admissions Team
-      `;
+`;
 
       await resend.emails.send({
         from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
@@ -112,6 +106,7 @@ OCNS Admissions Team
           {
             filename: "acknowledgment_slip.pdf",
             content: slipBase64,
+            encoding: "base64",
           },
         ],
       });
@@ -128,4 +123,4 @@ OCNS Admissions Team
       body: JSON.stringify({ success: false, error: error.message }),
     };
   }
-};
+}
