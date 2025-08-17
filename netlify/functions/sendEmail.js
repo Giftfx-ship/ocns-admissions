@@ -1,6 +1,6 @@
 // netlify/functions/sendEmail.js
 import { Resend } from "resend";
-import generateSlip from "../../utils/generateSlip.js"; // Make sure this path matches your structure
+import generateSlip from "../../utils/generateSlip.js";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -10,14 +10,18 @@ export async function handler(event, context) {
       return { statusCode: 405, body: "Method Not Allowed" };
     }
 
-    const body = JSON.parse(event.body);
-    const { fields, paymentData, olevelBase64, passportBase64 } = body;
+    // Parse form data as JSON
+    const body = event.body.startsWith("{") ? JSON.parse(event.body) : {};
+    const fields = body.fields || {};
+    const paymentData = body.paymentData || {};
+    const olevelBase64 = body.olevelBase64 || null;
+    const passportBase64 = body.passportBase64 || null;
 
-    // Generate PDF slip with passport included
-    const slipBase64 = await generateSlip({
-      ...fields,
-      passport: passportBase64,
-    }, paymentData);
+    // Generate PDF slip
+    const slipBase64 = await generateSlip(
+      { ...fields, passport: passportBase64 },
+      paymentData
+    );
 
     // --- Send to Admin ---
     const adminBody = `
@@ -54,10 +58,10 @@ Phone: ${fields.nok_phone || "N/A"}
 Address: ${fields.nok_address || "N/A"}
 
 --- Payment ---
-Reference: ${paymentData.reference}
-Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
+Reference: ${paymentData.reference || "N/A"}
+Amount Paid: ₦${paymentData.amount ? (paymentData.amount / 100).toFixed(2) : "0.00"}
 Date Paid: ${paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : "N/A"}
-Status: ${paymentData.status}
+Status: ${paymentData.status || "N/A"}
 `;
 
     await resend.emails.send({
@@ -65,12 +69,14 @@ Status: ${paymentData.status}
       to: "ogbomosocollegeofnursingscienc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
-      attachments: slipBase64 ? [
-        {
-          filename: "acknowledgment_slip.pdf",
-          content: slipBase64,
-        },
-      ] : [],
+      attachments: slipBase64
+        ? [
+            {
+              filename: "acknowledgment_slip.pdf",
+              content: slipBase64,
+            },
+          ]
+        : [],
     });
 
     // --- Send to Student ---
@@ -80,11 +86,11 @@ Dear ${fields.surname || "Applicant"},
 
 ✅ Your application has been successfully received by Ogbomoso College of Nursing Science.
 
-📎 Attached is your **Acknowledgment Slip**.  
+📎 Attached is your Acknowledgment Slip.  
 
-Please print it and bring it along on exam day.
+Please bring this slip on exam day.
 
-Join the aspirant group here: https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM
+Join the aspirant group here: https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t
 
 Best regards,  
 OCNS Admissions Team
@@ -115,4 +121,4 @@ OCNS Admissions Team
       body: JSON.stringify({ success: false, error: error.message }),
     };
   }
-};
+  }
