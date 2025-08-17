@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", function () {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(",")[1]); // strip data:*/*;base64,
+      reader.onload = () => resolve(reader.result.split(",")[1]); // strip prefix
       reader.onerror = (error) => reject(error);
     });
   }
@@ -24,14 +24,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const email = formData.get("email");
-    const amount = 100 * 100; // ₦200 for testing, change to 16000*100 for live
+    const amount = 200 * 100; // ₦200 for testing, change to 16000*100 for live
 
     formMessage.textContent = "Processing payment...";
     formMessage.style.color = "blue";
 
-    // ⚡ Use your Paystack key (use pk_test_xxx for testing first)
     const handler = PaystackPop.setup({
-      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27",
+      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27", // your live key
       email: email,
       amount: amount,
       currency: "NGN",
@@ -39,7 +38,7 @@ document.addEventListener("DOMContentLoaded", function () {
         try {
           formMessage.textContent = "Payment successful! Sending your application...";
 
-          // Convert file inputs to base64 if present
+          // Convert files to base64
           const slipFile = formData.get("slip");
           const olevelFile = formData.get("olevel");
           const passportFile = formData.get("passport");
@@ -48,9 +47,9 @@ document.addEventListener("DOMContentLoaded", function () {
           const olevelBase64 = olevelFile && olevelFile.size > 0 ? await toBase64(olevelFile) : null;
           const passportBase64 = passportFile && passportFile.size > 0 ? await toBase64(passportFile) : null;
 
-          // Build JSON body
+          // Build JSON payload
           const body = {
-            fields: Object.fromEntries(formData.entries()), // all form fields
+            fields: Object.fromEntries(formData.entries()),
             paymentData: {
               reference: response.reference,
               amount: amount,
@@ -62,7 +61,6 @@ document.addEventListener("DOMContentLoaded", function () {
             passportBase64,
           };
 
-          // Send to Netlify function
           const res = await fetch("/.netlify/functions/sendEmail", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -73,7 +71,7 @@ document.addEventListener("DOMContentLoaded", function () {
           if (data.success) {
             formMessage.style.color = "green";
             formMessage.textContent =
-              "Application submitted successfully! Check your email.";
+              "Application submitted successfully! Check your email for confirmation.";
             form.reset();
           } else {
             throw new Error(data.error || "Submission failed.");
