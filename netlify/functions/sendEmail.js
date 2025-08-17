@@ -23,7 +23,7 @@ export async function handler(event, context) {
     // Payment data
     const paymentData = {
       reference: fields.paymentReference || "N/A",
-      amount: 16000 * 100, // ₦16,000 in kobo
+      amount: 100 * 100, // ₦16,000 in kobo
       status: "success",
       paidAt: new Date().toISOString(),
     };
