@@ -1,39 +1,73 @@
 // netlify/functions/sendEmail.js
+import { v2 as cloudinary } from "cloudinary";
 import { Resend } from "resend";
 import generateSlip from "../../utils/generateSlip.js";
+import fetch from "node-fetch";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function handler(event, context) {
+// Helper: fetch Cloudinary image -> base64
+async function fetchAsBase64(url) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Could not fetch image: ${resp.status}`);
+  const buf = Buffer.from(await resp.arrayBuffer());
+  return buf.toString("base64");
+}
+
+export async function handler(event) {
   try {
     if (event.httpMethod !== "POST") {
       return { statusCode: 405, body: "Method Not Allowed" };
     }
 
-    // Parse form-data (Netlify passes as string)
-    const formData = event.body;
-    const params = new URLSearchParams(formData);
+    // Expect JSON body
+    const fields = JSON.parse(event.body || "{}");
 
-    // Extract all fields
-    const fields = {};
-    for (const [key, value] of params.entries()) {
-      fields[key] = value;
-    }
-
-    // Payment data
+    // Build payment data
     const paymentData = {
       reference: fields.paymentReference || "N/A",
-      amount: 100 * 100, // ₦16,000 in kobo
+      amount: 16000 * 100, // kobo
       status: "success",
       paidAt: new Date().toISOString(),
     };
 
-    // Generate acknowledgment slip (PDF base64)
-    const slipBase64 = await generateSlip(fields, paymentData);
+    // Prepare passport for slip: turn URL -> base64 so PDFKit can embed
+    let passportBase64 = null;
+    if (fields.passportUrl) {
+      try {
+        passportBase64 = await fetchAsBase64(fields.passportUrl);
+      } catch (e) {
+        console.warn("Passport fetch failed:", e.message);
+      }
+    }
 
-    // =====================
-    // ADMIN EMAIL BODY
-    // =====================
+    // Generate PDF (returns base64)
+    const slipBase64 = await generateSlip(
+      {
+        ...fields,
+        // pass base64 for embedding
+        passport: passportBase64,
+      },
+      paymentData
+    );
+
+    // Upload slip to Cloudinary (as data URI)
+    const slipDataUri = `data:application/pdf;base64,${slipBase64}`;
+    const slipUpload = await cloudinary.uploader.upload(slipDataUri, {
+      folder: "admissions/slips",
+      resource_type: "auto",
+      public_id: `${(fields.surname || "applicant")}_${paymentData.reference}`.replace(/\s+/g, "_"),
+      overwrite: true,
+    });
+    const slipUrl = slipUpload.secure_url;
+
+    // Compose Admin email (with links)
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -67,88 +101,68 @@ Relationship: ${fields.nok_relationship || "N/A"}
 Phone: ${fields.nok_phone || "N/A"}
 Address: ${fields.nok_address || "N/A"}
 
+--- Uploads ---
+Passport: ${fields.passportUrl || "N/A"}
+O’Level: ${fields.olevelUrl || "N/A"}
+
 --- Payment ---
 Reference: ${paymentData.reference}
 Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
 Date Paid: ${new Date(paymentData.paidAt).toLocaleString()}
 Status: ${paymentData.status}
-`;
 
-    // =====================
-    // ATTACHMENTS (Admin)
-    // =====================
-    const attachments = [];
+--- Acknowledgment Slip ---
+${slipUrl}
+`.trim();
 
-    if (slipBase64) {
-      attachments.push({
-        filename: "acknowledgment_slip.pdf",
-        content: slipBase64,
-        encoding: "base64",
-      });
-    }
-
-    if (fields.olevel) {
-      attachments.push({
-        filename: "olevel_result.png", // or .jpg / .pdf depending on upload
-        content: fields.olevel,
-        encoding: "base64",
-      });
-    }
-
-    // =====================
-    // SEND ADMIN EMAIL
-    // =====================
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: "ogbomosocollegeofnursingscienc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
-      attachments,
     });
 
-    // =====================
-    // SEND STUDENT EMAIL
-    // =====================
-    if (fields.email && slipBase64) {
+    // Student email (link only, no attachment)
+    if (fields.email) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
 
 ✅ Your application has been successfully received by Ogbomoso College of Nursing Science.
 
-📎 Attached is your **Acknowledgment Slip**.  
+📎 Your **Acknowledgment Slip** is available here:
+${slipUrl}
 
-Please print it and bring it along on exam day.
+📌 For your records:
+• Passport: ${fields.passportUrl || "N/A"}
+• O’Level: ${fields.olevelUrl || "N/A"}
 
-Join the aspirant group here: https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppM
+Please save these links and bring the slip on exam day.
 
-Best regards,  
+Join the aspirant group here: https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t
+
+Best regards,
 OCNS Admissions Team
-`;
+`.trim();
 
       await resend.emails.send({
         from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
         to: fields.email,
         subject: "✅ Application Received - Ogbomoso College of Nursing Science",
         text: studentBody,
-        attachments: [
-          {
-            filename: "acknowledgment_slip.pdf",
-            content: slipBase64,
-            encoding: "base64",
-          },
-        ],
       });
     }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, message: "Emails sent successfully" }),
+      body: JSON.stringify({
+        success: true,
+        slipUrl,
+        passportUrl: fields.passportUrl || null,
+        olevelUrl: fields.olevelUrl || null,
+      }),
     };
   } catch (error) {
-    console.error("❌ Error sending emails:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: error.message }),
-    };
+    console.error("❌ Error in sendEmail:", error);
+    return { statusCode: 500, body: JSON.stringify({ success: false, error: error.message }) };
   }
-           }
+}
