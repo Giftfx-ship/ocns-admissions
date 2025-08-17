@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", function () {
     formMessage.style.color = "blue";
 
     const handler = PaystackPop.setup({
-      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38ac27",
+      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27",
       email: email,
       amount: amount,
       currency: "NGN",
