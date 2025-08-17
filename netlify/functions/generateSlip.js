@@ -1,6 +1,5 @@
 // utils/generateSlip.js
 import PDFDocument from "pdfkit";
-import fs from "fs";
 import path from "path";
 
 export default function generateSlip(formData, paymentData) {
@@ -8,62 +7,49 @@ export default function generateSlip(formData, paymentData) {
     try {
       const doc = new PDFDocument({ margin: 50 });
       const buffers = [];
-
       doc.on("data", (chunk) => buffers.push(chunk));
       doc.on("end", () => {
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer.toString("base64"));
       });
 
-      // ===== HEADER STRIP =====
+      // HEADER STRIP
       doc.rect(0, 0, doc.page.width, 80).fill("#1155cc");
 
-      // ===== LOGO =====
+      // LOGO (optional, ignore if missing)
       try {
         const logoPath = path.join(process.cwd(), "images", "logo.png");
         doc.image(logoPath, 40, 15, { width: 60, height: 60 });
-      } catch (e) {
-        console.warn("Logo not found:", e.message);
-      }
+      } catch {}
 
-      // ===== PASSPORT =====
+      // PASSPORT (expects base64 string, not URL)
       if (formData.passport) {
         try {
           const passportBuffer = Buffer.from(formData.passport, "base64");
-          doc.image(passportBuffer, doc.page.width - 120, 15, {
-            width: 80,
-            height: 80,
-          }).rect(doc.page.width - 125, 10, 90, 90).stroke();
-        } catch (e) {
-          console.warn("Invalid passport base64:", e.message);
-        }
+          doc
+            .image(passportBuffer, doc.page.width - 120, 15, { width: 80, height: 80 })
+            .rect(doc.page.width - 125, 10, 90, 90)
+            .stroke();
+        } catch {}
       }
 
-      // ===== TITLE =====
-      doc.fillColor("#ffffff").fontSize(20).text(
-        "Ogbomoso College of Nursing Science",
-        120,
-        25
-      );
+      // TITLE
+      doc.fillColor("#ffffff").fontSize(20).text("Ogbomoso College of Nursing Science", 120, 25);
       doc.fillColor("#000000");
       doc.moveDown(6);
-      doc.fontSize(18).text("Acknowledgment Slip", {
-        align: "center",
-        underline: true,
-      });
+      doc.fontSize(18).text("Acknowledgment Slip", { align: "center", underline: true });
 
-      // ===== WATERMARK =====
+      // WATERMARK (optional)
       try {
-        const logoPath = path.join(process.cwd(), "images", "logo.png");
-        doc.opacity(0.05).image(logoPath, doc.page.width / 4, doc.page.height / 3, { width: 300 }).opacity(1);
-      } catch (e) {
-        console.warn("Watermark logo not found:", e.message);
-      }
+        const logoPath2 = path.join(process.cwd(), "images", "logo.png");
+        doc.opacity(0.05).image(logoPath2, doc.page.width / 4, doc.page.height / 3, { width: 300 }).opacity(1);
+      } catch {}
 
       doc.moveDown(2);
 
-      // ===== STUDENT DETAILS =====
-      doc.fontSize(12)
+      // DETAILS
+      doc
+        .fontSize(12)
         .text(`Surname: ${formData.surname || "N/A"}`)
         .text(`Other Names: ${formData.othernames || "N/A"}`)
         .text(`Gender: ${formData.gender || "N/A"}`)
@@ -77,22 +63,30 @@ export default function generateSlip(formData, paymentData) {
         .text(`Exam Month: ${formData.exam_month || "September"}`)
         .moveDown(1)
         .text(`Payment Reference: ${paymentData.reference || "N/A"}`)
-        .text(`Amount Paid: ₦${paymentData.amount ? (paymentData.amount / 100).toFixed(2) : "0.00"}`)
-        .text(`Payment Date: ${paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : "N/A"}`);
+        .text(
+          `Amount Paid: ₦${
+            paymentData.amount ? (paymentData.amount / 100).toFixed(2) : "0.00"
+          }`
+        )
+        .text(
+          `Payment Date: ${
+            paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : "N/A"
+          }`
+        );
 
       doc.moveDown(2);
       doc.fontSize(11).text("Please bring this slip on the exam day.", { align: "center" });
 
-      // ===== SIGNATURE =====
+      // SIGNATURE
       doc.moveDown(4);
       doc.fontSize(12).text("______________________________", { align: "left" });
       doc.text("Registrar's Signature", { align: "left" });
 
-      // ===== STAMP BOX =====
+      // STAMP BOX
       doc.rect(doc.page.width - 200, doc.page.height - 200, 150, 120).stroke("#1155cc");
       doc.fontSize(10).text("Official Stamp", doc.page.width - 180, doc.page.height - 150);
 
-      // ===== BORDER =====
+      // BORDER
       doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40).lineWidth(2).stroke("#1155cc");
 
       doc.end();
@@ -100,4 +94,4 @@ export default function generateSlip(formData, paymentData) {
       reject(error);
     }
   });
-                  }
+            }
