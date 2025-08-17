@@ -257,4 +257,15 @@
   <script src="form.js"></script>
 
   <!-- Show form on button click -->
-  <script
+  <script>
+    const showFormBtn = document.getElementById('showFormBtn');
+    const applySection = document.getElementById('apply');
+
+    showFormBtn.addEventListener('click', () => {
+      applySection.style.display = 'block';
+      applySection.scrollIntoView({ behavior: 'smooth' });
+    });
+  </script>
+
+</body>
+  </html>
