@@ -69,15 +69,22 @@
       return;
     }
 
-    disableForm(true);
-    setStatus("Opening Paystack…");
-
     const fd = new FormData(form);
     const fields = Object.fromEntries(fd.entries());
 
+    // Trim email and validate before opening Paystack
+    const email = (fields.email || "").trim();
+    if (!email) {
+      setStatus("Please enter a valid email address.", true);
+      return;
+    }
+
+    disableForm(true);
+    setStatus("Opening Paystack…");
+
     const handler = PaystackPop.setup({
       key: PAYSTACK_PUBLIC_KEY,
-      email: fields.email || "",
+      email: email,
       amount: 100 * 100, // kobo
       currency: "NGN",
       metadata: {
@@ -86,43 +93,40 @@
           { display_name: "Other Names", variable_name: "othernames", value: fields.othernames || "" },
         ],
       },
-      callback: function (response) {
-        // Use a self-invoking async function to safely use await
-        (async function () {
-          try {
-            setStatus("Payment successful. Uploading your files…");
+      callback: async function (response) {
+        try {
+          setStatus("Payment successful. Uploading your files…");
 
-            const passportUrl = await signedUpload(passportInput.files[0], "admissions/passports");
-            const olevelUrl = await signedUpload(olevelInput.files[0], "admissions/olevels");
+          const passportUrl = await signedUpload(passportInput.files[0], "admissions/passports");
+          const olevelUrl = await signedUpload(olevelInput.files[0], "admissions/olevels");
 
-            setStatus("Submitting your application…");
+          setStatus("Submitting your application…");
 
-            const payload = {
-              ...fields,
-              paymentReference: response.reference,
-              passportUrl,
-              olevelUrl,
-            };
+          const payload = {
+            ...fields,
+            paymentReference: response.reference,
+            passportUrl,
+            olevelUrl,
+          };
 
-            const res = await fetch("/.netlify/functions/sendEmail", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
+          const res = await fetch("/.netlify/functions/sendEmail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.success) {
-              throw new Error(data.error || `Submission failed (${res.status})`);
-            }
-
-            setStatus("🎉 Application submitted! Check your email for confirmation and slip link.");
-            form.reset();
-          } catch (err) {
-            setStatus(`❌ ${err.message || "Submission failed"}`, true);
-          } finally {
-            disableForm(false);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || `Submission failed (${res.status})`);
           }
-        })();
+
+          setStatus("🎉 Application submitted! Check your email for confirmation and slip link.");
+          form.reset();
+        } catch (err) {
+          setStatus(`❌ ${err.message || "Submission failed"}`, true);
+        } finally {
+          disableForm(false);
+        }
       },
       onClose: function () {
         setStatus("Payment window closed. Application not submitted.");
