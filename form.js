@@ -1,71 +1,68 @@
-// form.js
-document.addEventListener("DOMContentLoaded", function () {
+// public/js/form.js
+document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("admissionForm");
-  const formMessage = document.getElementById("formMessage");
+  const messageBox = document.getElementById("formMessage");
 
-  form.addEventListener("submit", function (e) {
+  form.addEventListener("submit", (e) => {
     e.preventDefault();
 
-    if (!form.confirm.checked) {
-      alert("Please confirm all information is correct.");
+    // ✅ Convert passport to base64 first
+    const passportFile = document.querySelector("#passport").files[0];
+    if (!passportFile) {
+      alert("Please upload your passport photo.");
       return;
     }
 
-    const email = form.email.value;
-    if (!email) {
-      alert("Enter your email.");
-      return;
-    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const passportBase64 = reader.result.split(",")[1]; // remove data:image/... prefix
 
-    const amount = 100 * 100; // ₦16,000 in kobo
+      // ✅ Trigger Paystack
+      const handler = PaystackPop.setup({
+        key: "pk_live_xxxxxxxxxx", // replace with your public Paystack key
+        email: document.getElementById("email").value,
+        amount: 16000 * 100, // in kobo
+        currency: "NGN",
+        callback: function (response) {
+          messageBox.innerHTML = "✅ Payment successful. Submitting application...";
 
-    formMessage.textContent = "Processing payment, please wait...";
-    formMessage.style.color = "blue";
-
-    const handler = PaystackPop.setup({
-      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27", // replace with your Paystack public key
-      email: email,
-      amount: amount,
-      currency: "NGN",
-      callback: function (response) {
-        formMessage.textContent =
-          "✅ Payment successful, sending application...";
-        formMessage.style.color = "blue";
-
-        // Collect all form data
-        const formData = Object.fromEntries(new FormData(form).entries());
-        formData.paymentReference = response.reference;
-
-        // Send data to Netlify function
-        fetch("/.netlify/functions/sendEmail", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.success) {
-              formMessage.textContent =
-                "🎉 Application submitted successfully!";
-              formMessage.style.color = "green";
-              form.reset();
-            } else {
-              throw new Error(data.error || "Unknown error");
-            }
-          })
-          .catch((err) => {
-            formMessage.textContent =
-              "❌ Error submitting application. Please try again.";
-            formMessage.style.color = "red";
-            console.error("Submission error:", err);
+          // ✅ Collect form fields
+          const formData = new FormData(form);
+          const fields = {};
+          formData.forEach((value, key) => {
+            fields[key] = value;
           });
-      },
-      onClose: function () {
-        formMessage.textContent = "❌ Payment window closed.";
-        formMessage.style.color = "red";
-      },
-    });
+          fields.passport = passportBase64;
+          fields.paymentReference = response.reference;
 
-    handler.openIframe();
+          // ✅ Send to Netlify function
+          fetch("/.netlify/functions/sendEmail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(fields),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.success) {
+                messageBox.innerHTML = "🎉 Application submitted! Check your email.";
+                form.reset();
+              } else {
+                messageBox.innerHTML = "❌ Error: " + data.error;
+              }
+            })
+            .catch((err) => {
+              console.error(err);
+              messageBox.innerHTML = "❌ Failed to submit application.";
+            });
+        },
+        onClose: function () {
+          alert("Payment window closed.");
+        },
+      });
+
+      handler.openIframe();
+    };
+
+    reader.readAsDataURL(passportFile);
   });
 });
