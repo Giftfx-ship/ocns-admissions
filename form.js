@@ -7,7 +7,6 @@
   const form = document.getElementById("admissionForm");
   const messageBox = document.getElementById("formMessage");
 
-  // Use name selectors instead of IDs to match your HTML
   const passportInput = form.querySelector('[name="passport"]');
   const olevelInput = form.querySelector('[name="olevel"]');
 
@@ -20,24 +19,20 @@
   }
 
   function disableForm(disabled) {
-    Array.from(form.elements).forEach((el) => (el.disabled = disabled));
+    Array.from(form.elements).forEach(el => (el.disabled = disabled));
   }
 
   async function getSignature(folder) {
-    console.log("Requesting upload signature for folder:", folder);
     const res = await fetch("/.netlify/functions/sign-upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folder }),
     });
     if (!res.ok) throw new Error("Failed to get upload signature");
-    const data = await res.json();
-    console.log("Received signature:", data);
-    return data;
+    return res.json();
   }
 
   async function signedUpload(file, folder) {
-    console.log("Uploading file:", file.name, "to folder:", folder);
     const sig = await getSignature(folder);
 
     const fd = new FormData();
@@ -55,13 +50,11 @@
       throw new Error(data.error?.message || "Cloudinary upload failed");
     }
 
-    console.log("Upload successful:", data.secure_url);
     return data.secure_url;
   }
 
-  form.addEventListener("submit", async (e) => {
+  form.addEventListener("submit", function (e) {
     e.preventDefault();
-    console.log("Form submission started.");
 
     if (!passportInput.files[0]) {
       setStatus("Please upload your passport photograph.", true);
@@ -71,33 +64,31 @@
       setStatus("Please upload your O’Level result.", true);
       return;
     }
-
     if (typeof PaystackPop === "undefined") {
       setStatus('Paystack script not loaded.', true);
       return;
     }
 
-    try {
-      disableForm(true);
-      setStatus("Opening Paystack…");
+    disableForm(true);
+    setStatus("Opening Paystack…");
 
-      const fd = new FormData(form);
-      const fields = Object.fromEntries(fd.entries());
-      console.log("Form fields:", fields);
+    const fd = new FormData(form);
+    const fields = Object.fromEntries(fd.entries());
 
-      const handler = PaystackPop.setup({
-        key: PAYSTACK_PUBLIC_KEY,
-        email: fields.email || "",
-        amount: 100 * 100, // kobo
-        currency: "NGN",
-        metadata: {
-          custom_fields: [
-            { display_name: "Surname", variable_name: "surname", value: fields.surname || "" },
-            { display_name: "Other Names", variable_name: "othernames", value: fields.othernames || "" },
-          ],
-        },
-        callback: async function (response) {
-          console.log("Payment callback received:", response);
+    const handler = PaystackPop.setup({
+      key: PAYSTACK_PUBLIC_KEY,
+      email: fields.email || "",
+      amount: 100 * 100, // kobo
+      currency: "NGN",
+      metadata: {
+        custom_fields: [
+          { display_name: "Surname", variable_name: "surname", value: fields.surname || "" },
+          { display_name: "Other Names", variable_name: "othernames", value: fields.othernames || "" },
+        ],
+      },
+      callback: function (response) {
+        // Use a self-invoking async function to safely use await
+        (async function () {
           try {
             setStatus("Payment successful. Uploading your files…");
 
@@ -113,8 +104,6 @@
               olevelUrl,
             };
 
-            console.log("Sending payload to backend:", payload);
-
             const res = await fetch("/.netlify/functions/sendEmail", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -129,23 +118,18 @@
             setStatus("🎉 Application submitted! Check your email for confirmation and slip link.");
             form.reset();
           } catch (err) {
-            console.error("Error during callback:", err);
             setStatus(`❌ ${err.message || "Submission failed"}`, true);
           } finally {
             disableForm(false);
           }
-        },
-        onClose: function () {
-          setStatus("Payment window closed. Application not submitted.");
-          disableForm(false);
-        },
-      });
+        })();
+      },
+      onClose: function () {
+        setStatus("Payment window closed. Application not submitted.");
+        disableForm(false);
+      },
+    });
 
-      handler.openIframe();
-    } catch (err) {
-      console.error("Submission error:", err);
-      setStatus(`❌ ${err.message || "Something went wrong."}`, true);
-      disableForm(false);
-    }
+    handler.openIframe();
   });
 })();
