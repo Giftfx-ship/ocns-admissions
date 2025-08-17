@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    const amount = 16000 * 100; // ₦16,000 in kobo
+    const amount = 100 * 100; // ₦16,000 in kobo
 
     formMessage.textContent = "Processing payment, please wait...";
     formMessage.style.color = "blue";
