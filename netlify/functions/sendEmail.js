@@ -10,18 +10,25 @@ export async function handler(event, context) {
       return { statusCode: 405, body: "Method Not Allowed" };
     }
 
-    // Parse form data as JSON
-    const body = event.body.startsWith("{") ? JSON.parse(event.body) : {};
-    const fields = body.fields || {};
-    const paymentData = body.paymentData || {};
-    const olevelBase64 = body.olevelBase64 || null;
-    const passportBase64 = body.passportBase64 || null;
+    // Use FormData-style parsing
+    const formData = await event.body; // Netlify passes form data as string
+    const params = new URLSearchParams(formData);
+
+    // Extract all fields
+    const fields = {};
+    for (const [key, value] of params.entries()) {
+      fields[key] = value;
+    }
+
+    const paymentData = {
+      reference: fields.paymentReference || "N/A",
+      amount: 16000 * 100, // ₦16,000 in kobo
+      status: "success",
+      paidAt: new Date().toISOString(),
+    };
 
     // Generate PDF slip
-    const slipBase64 = await generateSlip(
-      { ...fields, passport: passportBase64 },
-      paymentData
-    );
+    const slipBase64 = await generateSlip(fields, paymentData);
 
     // --- Send to Admin ---
     const adminBody = `
@@ -58,10 +65,10 @@ Phone: ${fields.nok_phone || "N/A"}
 Address: ${fields.nok_address || "N/A"}
 
 --- Payment ---
-Reference: ${paymentData.reference || "N/A"}
-Amount Paid: ₦${paymentData.amount ? (paymentData.amount / 100).toFixed(2) : "0.00"}
-Date Paid: ${paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : "N/A"}
-Status: ${paymentData.status || "N/A"}
+Reference: ${paymentData.reference}
+Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
+Date Paid: ${new Date(paymentData.paidAt).toLocaleString()}
+Status: ${paymentData.status}
 `;
 
     await resend.emails.send({
@@ -86,11 +93,11 @@ Dear ${fields.surname || "Applicant"},
 
 ✅ Your application has been successfully received by Ogbomoso College of Nursing Science.
 
-📎 Attached is your Acknowledgment Slip.  
+📎 Attached is your **Acknowledgment Slip**.  
 
-Please bring this slip on exam day.
+Please print it and bring it along on exam day.
 
-Join the aspirant group here: https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t
+Join the aspirant group here: https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppM
 
 Best regards,  
 OCNS Admissions Team
@@ -121,4 +128,4 @@ OCNS Admissions Team
       body: JSON.stringify({ success: false, error: error.message }),
     };
   }
-  }
+};
