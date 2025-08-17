@@ -1,17 +1,19 @@
-const PDFDocument = require("pdfkit");
-const path = require("path");
+// utils/generateSlip.js
+import PDFDocument from "pdfkit";
+import fs from "fs";
+import path from "path";
 
-module.exports = function generateSlip(formData, paymentData) {
+export default function generateSlip(formData, paymentData) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50 });
       const buffers = [];
 
-      // collect PDF chunks in memory
+      // Collect PDF chunks in memory
       doc.on("data", (chunk) => buffers.push(chunk));
       doc.on("end", () => {
         const pdfBuffer = Buffer.concat(buffers);
-        resolve(pdfBuffer.toString("base64")); // return as base64 string
+        resolve(pdfBuffer.toString("base64")); // Return base64 string
       });
 
       // --- HEADER BACKGROUND ---
@@ -25,19 +27,26 @@ module.exports = function generateSlip(formData, paymentData) {
         console.warn("Logo not found:", e.message);
       }
 
-      // --- PASSPORT PHOTO ---
-      if (formData.passportBase64) {
+      // --- PASSPORT PHOTO (base64) ---
+      if (formData.passport) {
         try {
-          const passportBuffer = Buffer.from(formData.passportBase64, "base64");
-          doc.image(passportBuffer, doc.page.width - 120, 15, { width: 80, height: 80 })
-            .rect(doc.page.width - 125, 10, 90, 90).stroke();
+          const passportBuffer = Buffer.from(formData.passport, "base64");
+          doc.image(passportBuffer, doc.page.width - 120, 15, {
+            width: 80,
+            height: 80,
+          })
+            .rect(doc.page.width - 125, 10, 90, 90)
+            .stroke();
         } catch (e) {
           console.warn("Invalid passport base64:", e.message);
         }
       }
 
       // --- TITLE ---
-      doc.fillColor("#ffffff").fontSize(20).text("Ogbomoso College of Nursing Science", 120, 25);
+      doc.fillColor("#ffffff")
+        .fontSize(20)
+        .text("Ogbomoso College of Nursing Science", 120, 25);
+
       doc.fillColor("#000000");
       doc.moveDown(6);
       doc.fontSize(18).text("Acknowledgment Slip", { align: "center", underline: true });
@@ -45,7 +54,11 @@ module.exports = function generateSlip(formData, paymentData) {
       // --- WATERMARK ---
       try {
         doc.opacity(0.05)
-          .image(logoPath, doc.page.width / 4, doc.page.height / 3, { width: 300 })
+          .image(logoPath, doc.page.width / 4, doc.page.height / 3, {
+            width: 300,
+            align: "center",
+            valign: "center",
+          })
           .opacity(1);
       } catch (e) {
         console.warn("Watermark logo not found:", e.message);
@@ -74,19 +87,23 @@ module.exports = function generateSlip(formData, paymentData) {
       doc.fontSize(11).text("Please bring this slip on the exam day.", { align: "center" });
 
       // --- SIGNATURE AREA ---
-      doc.moveDown(4).fontSize(12).text("______________________________", { align: "left" });
+      doc.moveDown(4);
+      doc.fontSize(12).text("______________________________", { align: "left" });
       doc.text("Registrar's Signature", { align: "left" });
 
       // --- STAMP BOX ---
-      doc.rect(doc.page.width - 200, doc.page.height - 200, 150, 120).stroke("#1155cc");
+      doc.rect(doc.page.width - 200, doc.page.height - 200, 150, 120)
+        .stroke("#1155cc");
       doc.fontSize(10).text("Official Stamp", doc.page.width - 180, doc.page.height - 150);
 
       // --- BORDER ---
-      doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40).lineWidth(2).stroke("#1155cc");
+      doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40)
+        .lineWidth(2)
+        .stroke("#1155cc");
 
       doc.end();
     } catch (error) {
       reject(error);
     }
   });
-};
+                                                                        }
