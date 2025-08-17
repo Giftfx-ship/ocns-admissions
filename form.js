@@ -24,7 +24,12 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const email = formData.get("email");
-    const amount = 200 * 100; // ₦200 for testing, change to 16000*100 for live
+    if (!email) {
+      alert("Please enter your email before proceeding.");
+      return;
+    }
+
+    const amount = 100 * 100; // ₦200 for testing, change to 16000*100 for live
 
     formMessage.textContent = "Processing payment...";
     formMessage.style.color = "blue";
@@ -50,7 +55,7 @@ document.addEventListener("DOMContentLoaded", function () {
           // Build fields object (skip files)
           const fields = {};
           formData.forEach((value, key) => {
-            if (value instanceof File) return; // skip file objects
+            if (value instanceof File) return;
             fields[key] = value;
           });
 
