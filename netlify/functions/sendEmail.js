@@ -1,41 +1,41 @@
-const fs = require("fs");
-const path = require("path");
-const { Resend } = require("resend");
+// netlify/functions/sendEmail.js
+import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-async function sendApplicationEmails(fields, paymentData, slipPath, files) {
-  const getSingleFile = (fileField) =>
-    Array.isArray(fileField) ? fileField[0] : fileField;
+export async function handler(event, context) {
+  try {
+    if (event.httpMethod !== "POST") {
+      return { statusCode: 405, body: "Method Not Allowed" };
+    }
 
-  const olevelFile = getSingleFile(files.olevel);
-  const passportFile = getSingleFile(files.passport);
+    const body = JSON.parse(event.body);
+    const { fields, paymentData, slipBase64, olevelBase64, passportBase64 } = body;
 
-  // Prepare attachments (base64 required for Resend)
-  const attachments = [
-    {
-      filename: "acknowledgment_slip.pdf",
-      content: fs.readFileSync(slipPath).toString("base64"),
-    },
-  ];
-  if (olevelFile) {
-    attachments.push({
-      filename: olevelFile.filename || "olevel_result.pdf",
-      content: fs.readFileSync(olevelFile.path).toString("base64"),
-    });
-  }
-  if (passportFile) {
-    attachments.push({
-      filename: passportFile.filename || "passport.jpg",
-      content: fs.readFileSync(passportFile.path).toString("base64"),
-    });
-  }
+    // Attachments (only from base64 strings)
+    const attachments = [];
+    if (slipBase64) {
+      attachments.push({
+        filename: "acknowledgment_slip.pdf",
+        content: slipBase64,
+      });
+    }
+    if (olevelBase64) {
+      attachments.push({
+        filename: "olevel_result.pdf",
+        content: olevelBase64,
+      });
+    }
+    if (passportBase64) {
+      attachments.push({
+        filename: "passport.jpg",
+        content: passportBase64,
+      });
+    }
 
-  // Admin email body (detailed)
-  const adminBody = `
-==============================
-   📩 NEW STUDENT APPLICATION
-==============================
+    // Admin email
+    const adminBody = `
+📩 NEW STUDENT APPLICATION
 
 --- Personal Info ---
 Surname: ${fields.surname || "N/A"}
@@ -71,25 +71,25 @@ Address: ${fields.nok_address || "N/A"}
 Reference: ${paymentData.reference}
 Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
 Date Paid: ${
-    paymentData.paidAt
-      ? new Date(paymentData.paidAt).toLocaleString()
-      : "N/A"
-  }
+      paymentData.paidAt
+        ? new Date(paymentData.paidAt).toLocaleString()
+        : "N/A"
+    }
 Status: ${paymentData.status}
-  `;
+`;
 
-  // Send to Admin
-  await resend.emails.send({
-    from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
-    to: "ogbomosocollegeofnursingscienc@gmail.com", // admin email
-    subject: "📩 New Student Registration Submitted",
-    text: adminBody,
-    attachments,
-  });
+    // Send email to Admin
+    await resend.emails.send({
+      from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
+      to: "ogbomosocollegeofnursingscienc@gmail.com",
+      subject: "📩 New Student Registration Submitted",
+      text: adminBody,
+      attachments,
+    });
 
-  // Student confirmation (short + polite)
-  if (fields.email) {
-    const studentBody = `
+    // Confirmation email to Student
+    if (fields.email && slipBase64) {
+      const studentBody = `
 Dear ${fields.surname || "Applicant"},
 
 Thank you for applying to **Ogbomoso College of Nursing Science**.
@@ -104,32 +104,31 @@ We wish you success in your admission process.
 
 Best Regards,  
 Ogbomoso College of Nursing Science Admissions Team
-    `;
+      `;
 
-    await resend.emails.send({
-      from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
-      to: fields.email,
-      subject: "✅ Application Received - Ogbomoso College of Nursing Science",
-      text: studentBody,
-      attachments: [
-        {
-          filename: "acknowledgment_slip.pdf",
-          content: fs.readFileSync(slipPath).toString("base64"),
-        },
-      ],
-    });
+      await resend.emails.send({
+        from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
+        to: fields.email,
+        subject: "✅ Application Received - Ogbomoso College of Nursing Science",
+        text: studentBody,
+        attachments: [
+          {
+            filename: "acknowledgment_slip.pdf",
+            content: slipBase64,
+          },
+        ],
+      });
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: true, message: "Emails sent" }),
+    };
+  } catch (error) {
+    console.error("❌ Error sending emails:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ success: false, error: error.message }),
+    };
   }
-
-  // Cleanup temp files
-  try {
-    fs.unlinkSync(slipPath);
-    if (olevelFile) fs.unlinkSync(olevelFile.path);
-    if (passportFile) fs.unlinkSync(passportFile.path);
-  } catch (err) {
-    console.warn("⚠️ Cleanup skipped:", err.message);
-  }
-
-  return true;
 }
-
-module.exports = sendApplicationEmails;
