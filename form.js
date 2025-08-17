@@ -1,4 +1,4 @@
-// public/js/form.js
+// form.js
 document.addEventListener("DOMContentLoaded", function () {
   const form = document.getElementById("admissionForm");
   const formMessage = document.getElementById("formMessage");
@@ -23,47 +23,46 @@ document.addEventListener("DOMContentLoaded", function () {
     formMessage.style.color = "blue";
 
     const handler = PaystackPop.setup({
-      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27", // Correct live key
+      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27", // replace with your Paystack public key
       email: email,
       amount: amount,
       currency: "NGN",
       callback: function (response) {
-        formMessage.textContent = "Payment successful! Sending your application...";
+        formMessage.textContent =
+          "✅ Payment successful, sending application...";
+        formMessage.style.color = "blue";
 
-        // Prepare FormData for Netlify function
-        const formData = new FormData(form);
-        formData.append("paymentReference", response.reference);
+        // Collect all form data
+        const formData = Object.fromEntries(new FormData(form).entries());
+        formData.paymentReference = response.reference;
 
+        // Send data to Netlify function
         fetch("/.netlify/functions/sendEmail", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
         })
-          .then(res => res.json())
-          .then(data => {
+          .then((res) => res.json())
+          .then((data) => {
             if (data.success) {
+              formMessage.textContent =
+                "🎉 Application submitted successfully!";
               formMessage.style.color = "green";
-              formMessage.innerHTML = `
-                Application submitted! ✅<br>
-                Check your email for the acknowledgment slip.<br>
-                Bring this slip along on exam day.<br>
-                Join the aspirant group: 
-                <a href="https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM" target="_blank">Click here</a>
-              `;
               form.reset();
             } else {
-              formMessage.style.color = "red";
-              formMessage.textContent = "Error: " + (data.error || "Please contact support.");
+              throw new Error(data.error || "Unknown error");
             }
           })
-          .catch(err => {
-            console.error(err);
+          .catch((err) => {
+            formMessage.textContent =
+              "❌ Error submitting application. Please try again.";
             formMessage.style.color = "red";
-            formMessage.textContent = "Network error. Please try again.";
+            console.error("Submission error:", err);
           });
       },
       onClose: function () {
+        formMessage.textContent = "❌ Payment window closed.";
         formMessage.style.color = "red";
-        formMessage.textContent = "Payment cancelled. You can try again.";
       },
     });
 
