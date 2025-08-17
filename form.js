@@ -11,11 +11,11 @@ const passportInput = form.querySelector('[name="passport"]');
 const olevelInput = form.querySelector('[name="olevel"]');
 
 function setStatus(msg, isErr = false) {
-consoleisErr ? "error" : "log";
-if (messageBox) {
-messageBox.textContent = msg;
-messageBox.style.color = isErr ? "crimson" : "inherit";
-}
+  console[isErr ? "error" : "log"](msg);
+  if (messageBox) {
+    messageBox.textContent = msg;
+    messageBox.style.color = isErr ? "crimson" : "inherit";
+  }
 }
 
 function disableForm(disabled) {
