@@ -13,27 +13,27 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  form.addEventListener("submit", async function (e) {
+  form.addEventListener("submit", function (e) {
     e.preventDefault();
 
     const formData = new FormData(form);
 
-    // Check confirm box
     if (!formData.get("confirm")) {
       alert("Please confirm that all information is correct.");
       return;
     }
 
     const email = formData.get("email");
-    const amount = 100 * 100; // ₦100 (test)
+    const amount = 100 * 100; // ₦200 for testing, change to 16000*100 for live
 
     formMessage.textContent = "Processing payment...";
     formMessage.style.color = "blue";
 
+    // ⚡ Use your Paystack key (use pk_test_xxx for testing first)
     const handler = PaystackPop.setup({
       key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27",
-      email,
-      amount,
+      email: email,
+      amount: amount,
       currency: "NGN",
       callback: async function (response) {
         try {
@@ -73,7 +73,7 @@ document.addEventListener("DOMContentLoaded", function () {
           if (data.success) {
             formMessage.style.color = "green";
             formMessage.textContent =
-              "Application submitted successfully! Check your email for confirmation.";
+              "Application submitted successfully! Check your email.";
             form.reset();
           } else {
             throw new Error(data.error || "Submission failed.");
