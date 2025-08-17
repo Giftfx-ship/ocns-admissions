@@ -1,30 +1,39 @@
 const PDFDocument = require('pdfkit');
-const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
 module.exports = function generateSlip(formData, paymentData) {
   return new Promise((resolve, reject) => {
     try {
-      const slipPath = path.join(os.tmpdir(), `acknowledgment_${Date.now()}.pdf`);
       const doc = new PDFDocument({ margin: 50 });
-      const writeStream = fs.createWriteStream(slipPath);
-      doc.pipe(writeStream);
+      const buffers = [];
+
+      // collect PDF chunks in memory
+      doc.on('data', (chunk) => buffers.push(chunk));
+      doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(buffers);
+        resolve(pdfBuffer.toString('base64')); // return as base64 string
+      });
 
       // --- HEADER BACKGROUND ---
       doc.rect(0, 0, doc.page.width, 80).fill('#1155cc');
 
       // --- LOGO ---
       const logoPath = path.join(process.cwd(), 'images', 'logo.png');
-      if (fs.existsSync(logoPath)) {
+      try {
         doc.image(logoPath, 40, 15, { width: 60, height: 60 });
+      } catch (e) {
+        console.warn('Logo not found:', e.message);
       }
 
-      // --- PASSPORT PHOTO (top-right) ---
-      const passportPath = formData.passport ? path.join(process.cwd(), 'uploads', formData.passport) : null;
-      if (passportPath && fs.existsSync(passportPath)) {
-        doc.image(passportPath, doc.page.width - 120, 15, { width: 80, height: 80 })
-          .rect(doc.page.width - 125, 10, 90, 90).stroke(); // border around passport
+      // --- PASSPORT PHOTO (expects base64 string) ---
+      if (formData.passport) {
+        try {
+          const passportBuffer = Buffer.from(formData.passport, 'base64');
+          doc.image(passportBuffer, doc.page.width - 120, 15, { width: 80, height: 80 })
+            .rect(doc.page.width - 125, 10, 90, 90).stroke();
+        } catch (e) {
+          console.warn('Invalid passport base64:', e.message);
+        }
       }
 
       // --- TITLE ---
@@ -37,7 +46,7 @@ module.exports = function generateSlip(formData, paymentData) {
       doc.fontSize(18).text('Acknowledgment Slip', { align: 'center', underline: true });
 
       // --- WATERMARK ---
-      if (fs.existsSync(logoPath)) {
+      try {
         doc.opacity(0.05)
           .image(logoPath, doc.page.width / 4, doc.page.height / 3, {
             width: 300,
@@ -45,6 +54,8 @@ module.exports = function generateSlip(formData, paymentData) {
             valign: 'center'
           })
           .opacity(1);
+      } catch (e) {
+        console.warn('Watermark logo not found:', e.message);
       }
 
       doc.moveDown(2);
@@ -86,8 +97,6 @@ module.exports = function generateSlip(formData, paymentData) {
 
       doc.end();
 
-      writeStream.on('finish', () => resolve(slipPath));
-      writeStream.on('error', (err) => reject(err));
     } catch (error) {
       reject(error);
     }
