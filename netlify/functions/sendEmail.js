@@ -10,28 +10,7 @@ export async function handler(event, context) {
     }
 
     const body = JSON.parse(event.body);
-    const { fields, paymentData, slipBase64, olevelBase64, passportBase64 } = body;
-
-    // Attachments (only from base64 strings)
-    const attachments = [];
-    if (slipBase64) {
-      attachments.push({
-        filename: "acknowledgment_slip.pdf",
-        content: slipBase64,
-      });
-    }
-    if (olevelBase64) {
-      attachments.push({
-        filename: "olevel_result.pdf",
-        content: olevelBase64,
-      });
-    }
-    if (passportBase64) {
-      attachments.push({
-        filename: "passport.jpg",
-        content: passportBase64,
-      });
-    }
+    const { fields, paymentData, slipBase64 } = body;
 
     // Admin email
     const adminBody = `
@@ -78,13 +57,20 @@ Date Paid: ${
 Status: ${paymentData.status}
 `;
 
-    // Send email to Admin
+    // Send email to Admin (with slip)
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: "ogbomosocollegeofnursingscienc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
-      attachments,
+      attachments: slipBase64
+        ? [
+            {
+              filename: "acknowledgment_slip.pdf",
+              content: slipBase64,
+            },
+          ]
+        : [],
     });
 
     // Confirmation email to Student
@@ -98,7 +84,6 @@ Thank you for applying to **Ogbomoso College of Nursing Science**.
 📎 Please find attached your **Acknowledgment Slip**.  
 
 You are required to print this slip and bring it along on the examination day.  
-If you uploaded your O'level and Passport, they have been securely received.
 
 We wish you success in your admission process.  
 
@@ -131,4 +116,4 @@ Ogbomoso College of Nursing Science Admissions Team
       body: JSON.stringify({ success: false, error: error.message }),
     };
   }
-}
+    }
