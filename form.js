@@ -81,7 +81,6 @@ const handler = PaystackPop.setup({
   email: (fields.email || "").trim(),  // <-- trim email
   amount: 100 * 100,
   currency: "NGN",
-  // ...  
   metadata: {  
     custom_fields: [  
       { display_name: "Surname", variable_name: "surname", value: fields.surname || "" },  
