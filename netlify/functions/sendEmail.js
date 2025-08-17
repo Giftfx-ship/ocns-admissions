@@ -1,18 +1,24 @@
-// netlify/functions/sendEmail.js
 import { Resend } from "resend";
+import generateSlip from "../generateSlip";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function handler(event, context) {
+export async function handler(event) {
   try {
     if (event.httpMethod !== "POST") {
       return { statusCode: 405, body: "Method Not Allowed" };
     }
 
     const body = JSON.parse(event.body);
-    const { fields, paymentData, slipBase64 } = body;
+    const { fields, paymentData, slipBase64, passportBase64 } = body;
 
-    // Admin email
+    // Include passport in formData for PDF
+    if (passportBase64) fields.passportBase64 = passportBase64;
+
+    // Generate slip if not already passed
+    const pdfBase64 = slipBase64 || await generateSlip(fields, paymentData);
+
+    // --- Admin Email ---
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -49,45 +55,36 @@ Address: ${fields.nok_address || "N/A"}
 --- Payment Details ---
 Reference: ${paymentData.reference}
 Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
-Date Paid: ${
-      paymentData.paidAt
-        ? new Date(paymentData.paidAt).toLocaleString()
-        : "N/A"
-    }
+Date Paid: ${paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : "N/A"}
 Status: ${paymentData.status}
 `;
 
-    // Send email to Admin (with slip)
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
-      to: "ogbomosocollegeofnursingscienc@gmail.com",
+      to: "ogbomosocollegeofnursingsc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
-      attachments: slipBase64
-        ? [
-            {
-              filename: "acknowledgment_slip.pdf",
-              content: slipBase64,
-            },
-          ]
-        : [],
+      attachments: [
+        {
+          filename: "acknowledgment_slip.pdf",
+          content: pdfBase64,
+        },
+      ],
     });
 
-    // Confirmation email to Student
-    if (fields.email && slipBase64) {
+    // --- Student Email ---
+    if (fields.email) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
 
-Thank you for applying to **Ogbomoso College of Nursing Science**.
+Thank you for applying to Ogbomoso College of Nursing Science.
 
-✅ Your application has been successfully received.  
-📎 Please find attached your **Acknowledgment Slip**.  
+✅ Your application has been successfully received.
+📎 Please find attached your Acknowledgment Slip.
 
-You are required to print this slip and bring it along on the examination day.  
+Please bring this slip on the exam day.
 
-We wish you success in your admission process.  
-
-Best Regards,  
+Best Regards,
 Ogbomoso College of Nursing Science Admissions Team
       `;
 
@@ -99,21 +96,15 @@ Ogbomoso College of Nursing Science Admissions Team
         attachments: [
           {
             filename: "acknowledgment_slip.pdf",
-            content: slipBase64,
+            content: pdfBase64,
           },
         ],
       });
     }
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ success: true, message: "Emails sent" }),
-    };
-  } catch (error) {
-    console.error("❌ Error sending emails:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: error.message }),
-    };
+    return { statusCode: 200, body: JSON.stringify({ success: true, message: "Emails sent" }) };
+  } catch (err) {
+    console.error("❌ Error sending emails:", err);
+    return { statusCode: 500, body: JSON.stringify({ success: false, error: err.message }) };
   }
-    }
+};
