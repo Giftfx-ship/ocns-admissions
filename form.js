@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const email = formData.get("email");
-    const amount = 100 * 100; // ₦200 for testing, change to 16000*100 for live
+    const amount = 200 * 100; // ₦200 for testing, change to 16000*100 for live
 
     formMessage.textContent = "Processing payment...";
     formMessage.style.color = "blue";
@@ -47,9 +47,16 @@ document.addEventListener("DOMContentLoaded", function () {
           const olevelBase64 = olevelFile && olevelFile.size > 0 ? await toBase64(olevelFile) : null;
           const passportBase64 = passportFile && passportFile.size > 0 ? await toBase64(passportFile) : null;
 
+          // Build fields object (skip files)
+          const fields = {};
+          formData.forEach((value, key) => {
+            if (value instanceof File) return; // skip file objects
+            fields[key] = value;
+          });
+
           // Build JSON payload
           const body = {
-            fields: Object.fromEntries(formData.entries()),
+            fields,
             paymentData: {
               reference: response.reference,
               amount: amount,
