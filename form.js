@@ -1,9 +1,7 @@
-// form.js
 document.addEventListener("DOMContentLoaded", function () {
   const form = document.getElementById("admissionForm");
   const formMessage = document.getElementById("formMessage");
 
-  // Helper: convert File to base64 string
   function toBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -29,13 +27,13 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    const amount = 100 * 100; // ₦200 for testing, change to 16000*100 for live
+    const amount = 15000 * 100; // ₦15,000 for your form
 
     formMessage.textContent = "Processing payment...";
     formMessage.style.color = "blue";
 
     const handler = PaystackPop.setup({
-      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27", // your live key
+      key: "pk_live_6ec6474fea7400b8bb4b87e53f6b21a38e14ac27", // live key
       email: email,
       amount: amount,
       currency: "NGN",
