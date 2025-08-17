@@ -1,24 +1,25 @@
+// netlify/functions/sendEmail.js
 import { Resend } from "resend";
-import generateSlip from "../generateSlip";
+import generateSlip from "../../utils/generateSlip.js"; // Make sure this path matches your structure
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function handler(event) {
+export async function handler(event, context) {
   try {
     if (event.httpMethod !== "POST") {
       return { statusCode: 405, body: "Method Not Allowed" };
     }
 
     const body = JSON.parse(event.body);
-    const { fields, paymentData, slipBase64, passportBase64 } = body;
+    const { fields, paymentData, olevelBase64, passportBase64 } = body;
 
-    // Include passport in formData for PDF
-    if (passportBase64) fields.passportBase64 = passportBase64;
+    // Generate PDF slip with passport included
+    const slipBase64 = await generateSlip({
+      ...fields,
+      passport: passportBase64,
+    }, paymentData);
 
-    // Generate slip if not already passed
-    const pdfBase64 = slipBase64 || await generateSlip(fields, paymentData);
-
-    // --- Admin Email ---
+    // --- Send to Admin ---
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -40,7 +41,7 @@ LGA: ${fields.lga || "N/A"}
 Home Town: ${fields.hometown || "N/A"}
 Address: ${fields.address || "N/A"}
 
---- Sponsor Info ---
+--- Sponsor ---
 Name: ${fields.sponsor_name || "N/A"}
 Relationship: ${fields.sponsor_relationship || "N/A"}
 Phone: ${fields.sponsor_phone || "N/A"}
@@ -52,7 +53,7 @@ Relationship: ${fields.nok_relationship || "N/A"}
 Phone: ${fields.nok_phone || "N/A"}
 Address: ${fields.nok_address || "N/A"}
 
---- Payment Details ---
+--- Payment ---
 Reference: ${paymentData.reference}
 Amount Paid: ₦${(paymentData.amount / 100).toFixed(2)}
 Date Paid: ${paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : "N/A"}
@@ -61,31 +62,32 @@ Status: ${paymentData.status}
 
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
-      to: "ogbomosocollegeofnursingsc@gmail.com",
+      to: "ogbomosocollegeofnursingscienc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
-      attachments: [
+      attachments: slipBase64 ? [
         {
           filename: "acknowledgment_slip.pdf",
-          content: pdfBase64,
+          content: slipBase64,
         },
-      ],
+      ] : [],
     });
 
-    // --- Student Email ---
-    if (fields.email) {
+    // --- Send to Student ---
+    if (fields.email && slipBase64) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
 
-Thank you for applying to Ogbomoso College of Nursing Science.
+✅ Your application has been successfully received by Ogbomoso College of Nursing Science.
 
-✅ Your application has been successfully received.
-📎 Please find attached your Acknowledgment Slip.
+📎 Attached is your **Acknowledgment Slip**.  
 
-Please bring this slip on the exam day.
+Please print it and bring it along on exam day.
 
-Best Regards,
-Ogbomoso College of Nursing Science Admissions Team
+Join the aspirant group here: https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM
+
+Best regards,  
+OCNS Admissions Team
       `;
 
       await resend.emails.send({
@@ -96,15 +98,21 @@ Ogbomoso College of Nursing Science Admissions Team
         attachments: [
           {
             filename: "acknowledgment_slip.pdf",
-            content: pdfBase64,
+            content: slipBase64,
           },
         ],
       });
     }
 
-    return { statusCode: 200, body: JSON.stringify({ success: true, message: "Emails sent" }) };
-  } catch (err) {
-    console.error("❌ Error sending emails:", err);
-    return { statusCode: 500, body: JSON.stringify({ success: false, error: err.message }) };
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: true, message: "Emails sent successfully" }),
+    };
+  } catch (error) {
+    console.error("❌ Error sending emails:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ success: false, error: error.message }),
+    };
   }
 };
