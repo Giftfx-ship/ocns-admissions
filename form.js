@@ -1,17 +1,9 @@
+// public/js/form.js
 document.addEventListener("DOMContentLoaded", function () {
   const form = document.getElementById("admissionForm");
   const formMessage = document.getElementById("formMessage");
 
-  // Convert file to base64
-  const toBase64 = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(",")[1]);
-      reader.onerror = (err) => reject(err);
-    });
-
-  form.addEventListener("submit", async function (e) {
+  form.addEventListener("submit", function (e) {
     e.preventDefault();
 
     if (!form.confirm.checked) {
@@ -27,7 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const amount = 16000 * 100; // ₦16,000 in kobo
 
-    formMessage.textContent = "Opening payment popup...";
+    formMessage.textContent = "Processing payment, please wait...";
     formMessage.style.color = "blue";
 
     const handler = PaystackPop.setup({
@@ -35,64 +27,43 @@ document.addEventListener("DOMContentLoaded", function () {
       email: email,
       amount: amount,
       currency: "NGN",
-      callback: async function (response) {
-        try {
-          formMessage.textContent = "Payment successful! Sending your application...";
+      callback: function (response) {
+        formMessage.textContent = "Payment successful! Sending your application...";
 
-          // Convert files to base64
-          const olevelBase64 = form.olevel.files[0] ? await toBase64(form.olevel.files[0]) : null;
-          const passportBase64 = form.passport.files[0] ? await toBase64(form.passport.files[0]) : null;
+        // Prepare FormData for Netlify function
+        const formData = new FormData(form);
+        formData.append("paymentReference", response.reference);
 
-          // Collect all form fields
-          const fields = {};
-          Array.from(form.elements).forEach((el) => {
-            if (el.name && el.type !== "file" && el.type !== "checkbox") {
-              fields[el.name] = el.value;
+        fetch("/.netlify/functions/sendEmail", {
+          method: "POST",
+          body: formData,
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              formMessage.style.color = "green";
+              formMessage.innerHTML = `
+                Application submitted! ✅<br>
+                Check your email for the acknowledgment slip.<br>
+                Bring this slip along on exam day.<br>
+                Join the aspirant group: 
+                <a href="https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM" target="_blank">Click here</a>
+              `;
+              form.reset();
+            } else {
+              formMessage.style.color = "red";
+              formMessage.textContent = "Error: " + (data.error || "Please contact support.");
             }
+          })
+          .catch(err => {
+            console.error(err);
+            formMessage.style.color = "red";
+            formMessage.textContent = "Network error. Please try again.";
           });
-
-          // Build payload
-          const body = {
-            fields,
-            paymentData: {
-              reference: response.reference,
-              amount,
-              status: "success",
-              paidAt: new Date().toISOString(),
-            },
-            olevelBase64,
-            passportBase64,
-          };
-
-          // Send to Netlify function
-          const res = await fetch("/.netlify/functions/sendEmail", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-
-          const data = await res.json();
-          if (data.success) {
-            formMessage.style.color = "green";
-            formMessage.innerHTML = `
-              Application submitted! ✅<br>
-              Check your email for the acknowledgment slip.<br>
-              Bring this slip along on exam day.<br>
-              Join the aspirant group: 
-              <a href="https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t" target="_blank">Click here</a>
-            `;
-            form.reset();
-          } else {
-            throw new Error(data.error || "Submission failed.");
-          }
-        } catch (err) {
-          formMessage.style.color = "red";
-          formMessage.textContent = "Error submitting application: " + err.message;
-        }
       },
       onClose: function () {
         formMessage.style.color = "red";
-        formMessage.textContent = "Payment cancelled.";
+        formMessage.textContent = "Payment cancelled. You can try again.";
       },
     });
 
