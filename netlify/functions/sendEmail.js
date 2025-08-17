@@ -10,20 +10,30 @@ export async function handler(event, context) {
       return { statusCode: 405, body: "Method Not Allowed" };
     }
 
-    // Parse JSON body (frontend sends JSON)
-    const fields = JSON.parse(event.body);
+    // Parse form-data (Netlify passes as string)
+    const formData = event.body;
+    const params = new URLSearchParams(formData);
 
+    // Extract all fields
+    const fields = {};
+    for (const [key, value] of params.entries()) {
+      fields[key] = value;
+    }
+
+    // Payment data
     const paymentData = {
       reference: fields.paymentReference || "N/A",
-      amount: 16000 * 100,
+      amount: 16000 * 100, // ₦16,000 in kobo
       status: "success",
       paidAt: new Date().toISOString(),
     };
 
-    // Generate PDF acknowledgment slip
+    // Generate acknowledgment slip (PDF base64)
     const slipBase64 = await generateSlip(fields, paymentData);
 
-    // --- Admin email ---
+    // =====================
+    // ADMIN EMAIL BODY
+    // =====================
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -64,23 +74,41 @@ Date Paid: ${new Date(paymentData.paidAt).toLocaleString()}
 Status: ${paymentData.status}
 `;
 
+    // =====================
+    // ATTACHMENTS (Admin)
+    // =====================
+    const attachments = [];
+
+    if (slipBase64) {
+      attachments.push({
+        filename: "acknowledgment_slip.pdf",
+        content: slipBase64,
+        encoding: "base64",
+      });
+    }
+
+    if (fields.olevel) {
+      attachments.push({
+        filename: "olevel_result.png", // or .jpg / .pdf depending on upload
+        content: fields.olevel,
+        encoding: "base64",
+      });
+    }
+
+    // =====================
+    // SEND ADMIN EMAIL
+    // =====================
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: "ogbomosocollegeofnursingscienc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
-      attachments: slipBase64
-        ? [
-            {
-              filename: "acknowledgment_slip.pdf",
-              content: slipBase64,
-              encoding: "base64",
-            },
-          ]
-        : [],
+      attachments,
     });
 
-    // --- Student email ---
+    // =====================
+    // SEND STUDENT EMAIL
+    // =====================
     if (fields.email && slipBase64) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
@@ -123,4 +151,4 @@ OCNS Admissions Team
       body: JSON.stringify({ success: false, error: error.message }),
     };
   }
-}
+           }
