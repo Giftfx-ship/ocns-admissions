@@ -1,6 +1,7 @@
 // utils/generateSlip.js
 import PDFDocument from "pdfkit";
 import path from "path";
+import fs from "fs";
 
 export default function generateSlip(formData, paymentData) {
   return new Promise((resolve, reject) => {
@@ -19,7 +20,9 @@ export default function generateSlip(formData, paymentData) {
       // LOGO (optional, ignore if missing)
       try {
         const logoPath = path.join(process.cwd(), "images", "logo.png");
-        doc.image(logoPath, 40, 15, { width: 60, height: 60 });
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, 40, 15, { width: 60, height: 60 });
+        }
       } catch {}
 
       // PASSPORT (expects base64 string, not URL)
@@ -30,7 +33,9 @@ export default function generateSlip(formData, paymentData) {
             .image(passportBuffer, doc.page.width - 120, 15, { width: 80, height: 80 })
             .rect(doc.page.width - 125, 10, 90, 90)
             .stroke();
-        } catch {}
+        } catch {
+          console.warn("Invalid passport image, skipping.");
+        }
       }
 
       // TITLE
@@ -42,37 +47,35 @@ export default function generateSlip(formData, paymentData) {
       // WATERMARK (optional)
       try {
         const logoPath2 = path.join(process.cwd(), "images", "logo.png");
-        doc.opacity(0.05).image(logoPath2, doc.page.width / 4, doc.page.height / 3, { width: 300 }).opacity(1);
+        if (fs.existsSync(logoPath2)) {
+          doc.opacity(0.05).image(logoPath2, doc.page.width / 4, doc.page.height / 3, { width: 300 }).opacity(1);
+        }
       } catch {}
 
       doc.moveDown(2);
 
       // DETAILS
-      doc
-        .fontSize(12)
-        .text(`Surname: ${formData.surname || "N/A"}`)
-        .text(`Other Names: ${formData.othernames || "N/A"}`)
-        .text(`Gender: ${formData.gender || "N/A"}`)
-        .text(`Marital Status: ${formData.marital_status || "N/A"}`)
-        .text(`Date of Birth: ${formData.dob || "N/A"}`)
-        .text(`Religion: ${formData.religion || "N/A"}`)
-        .text(`Email: ${formData.email || "N/A"}`)
-        .text(`Phone: ${formData.phone || "N/A"}`)
-        .text(`Address: ${formData.address || "N/A"}`)
-        .text(`Course: ${formData.course || "Basic Nursing"}`)
-        .text(`Exam Month: ${formData.exam_month || "September"}`)
-        .moveDown(1)
-        .text(`Payment Reference: ${paymentData.reference || "N/A"}`)
-        .text(
-          `Amount Paid: ₦${
-            paymentData.amount ? (paymentData.amount / 100).toFixed(2) : "0.00"
-          }`
-        )
-        .text(
-          `Payment Date: ${
-            paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : "N/A"
-          }`
-        );
+      const textFields = [
+        ["Surname", formData.surname],
+        ["Other Names", formData.othernames],
+        ["Gender", formData.gender],
+        ["Marital Status", formData.marital_status],
+        ["Date of Birth", formData.dob],
+        ["Religion", formData.religion],
+        ["Email", formData.email],
+        ["Phone", formData.phone],
+        ["Address", formData.address],
+        ["Course", formData.course || "Basic Nursing"],
+        ["Exam Month", formData.exam_month || "September"],
+        ["Payment Reference", paymentData.reference],
+        ["Amount Paid", paymentData.amount ? (paymentData.amount / 100).toFixed(2) : "0.00"],
+        ["Payment Date", paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : "N/A"],
+      ];
+
+      doc.fontSize(12);
+      textFields.forEach(([label, value]) => {
+        doc.text(`${label}: ${value || "N/A"}`);
+      });
 
       doc.moveDown(2);
       doc.fontSize(11).text("Please bring this slip on the exam day.", { align: "center" });
@@ -94,4 +97,4 @@ export default function generateSlip(formData, paymentData) {
       reject(error);
     }
   });
-            }
+                  }
