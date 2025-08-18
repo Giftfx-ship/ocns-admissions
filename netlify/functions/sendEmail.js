@@ -1,8 +1,25 @@
 // netlify/functions/sendEmail.js
 import { Resend } from "resend";
 import generateSlip from "../../utils/generateSlip.js";
+import fetch from "node-fetch";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Safe fetch helper: converts image URL -> buffer
+async function fetchAsBuffer(url, label = "file") {
+  if (!url) {
+    console.warn(`No URL provided for ${label}. Skipping.`);
+    return null;
+  }
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Could not fetch ${label}: ${resp.status}`);
+    return Buffer.from(await resp.arrayBuffer());
+  } catch (err) {
+    console.warn(`Failed to fetch ${label}:`, err.message);
+    return null;
+  }
+}
 
 export async function handler(event) {
   try {
@@ -12,10 +29,20 @@ export async function handler(event) {
 
     const fields = JSON.parse(event.body || "{}");
 
-    // Generate PDF slip (direct buffer, no payment)
-    const slipBuffer = await generateSlip(fields, {});
+    // Convert uploaded files to buffers
+    const passportBuffer = await fetchAsBuffer(fields.passportUrl, "passport");
+    const olevelBuffer = await fetchAsBuffer(fields.olevelUrl, "O’Level");
 
-    // Compose Admin email with all sections
+    // Generate PDF slip (no payment)
+    const slipBuffer = await generateSlip(
+      { ...fields, passport: passportBuffer },
+      { reference: "N/A", amount: 0, paidAt: null }
+    );
+
+    // Convert PDF buffer to data URI for email attachment
+    const slipDataUri = `data:application/pdf;base64,${slipBuffer.toString("base64")}`;
+
+    // Compose Admin email
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -26,8 +53,6 @@ Gender: ${fields.gender || "N/A"}
 Marital Status: ${fields.marital_status || "N/A"}
 Date of Birth: ${fields.dob || "N/A"}
 Religion: ${fields.religion || "N/A"}
-Course: ${fields.course || "N/A"}
-Exam Month: ${fields.exam_month || "N/A"}
 
 --- Contact ---
 Email: ${fields.email || "N/A"}
@@ -52,14 +77,11 @@ Phone: ${fields.nok_phone || "N/A"}
 Address: ${fields.nok_address || "N/A"}
 
 --- Uploads ---
-Passport: ${fields.passportName || "N/A"}
-O’Level: ${fields.olevelName || "N/A"}
-
---- Notes ---
-Additional info: ${fields.notes || "N/A"}
+Passport: ${fields.passportUrl || "N/A"}
+O’Level: ${fields.olevelUrl || "N/A"}
 `.trim();
 
-    // Send email to Admin
+    // Send admin email
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: "ogbomosocollegeofnursingscienc@gmail.com",
@@ -67,13 +89,15 @@ Additional info: ${fields.notes || "N/A"}
       text: adminBody,
       attachments: [
         {
-          filename: "Acknowledgment_Slip.pdf",
-          data: slipBuffer,
+          content: slipBuffer.toString("base64"),
+          filename: `${fields.surname || "applicant"}_slip.pdf`,
+          type: "application/pdf",
+          disposition: "attachment",
         },
       ],
     });
 
-    // Send email to Student
+    // Send student email
     if (fields.email) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
@@ -82,7 +106,13 @@ Dear ${fields.surname || "Applicant"},
 
 📎 Your Acknowledgment Slip is attached to this email.
 
-Please save it and bring it on exam day.
+📌 For your records:
+• Passport: ${fields.passportUrl || "N/A"}
+• O’Level: ${fields.olevelUrl || "N/A"}
+
+Please save these documents and bring the slip on exam day.
+
+Join the aspirant group here: https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t
 
 Best regards,
 OCNS Admissions Team
@@ -95,8 +125,10 @@ OCNS Admissions Team
         text: studentBody,
         attachments: [
           {
-            filename: "Acknowledgment_Slip.pdf",
-            data: slipBuffer,
+            content: slipBuffer.toString("base64"),
+            filename: `${fields.surname || "applicant"}_slip.pdf`,
+            type: "application/pdf",
+            disposition: "attachment",
           },
         ],
       });
@@ -104,7 +136,11 @@ OCNS Admissions Team
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true }),
+      body: JSON.stringify({
+        success: true,
+        passportUrl: fields.passportUrl || null,
+        olevelUrl: fields.olevelUrl || null,
+      }),
     };
   } catch (error) {
     console.error("❌ Error in sendEmail:", error);
@@ -113,4 +149,4 @@ OCNS Admissions Team
       body: JSON.stringify({ success: false, error: error.message }),
     };
   }
-}
+            }
