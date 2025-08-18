@@ -1,49 +1,34 @@
-// netlify/functions/sendEmail.js
 import { Resend } from "resend";
 import generateSlip from "../../utils/generateSlip.js";
-import formidable from "formidable";
-import fs from "fs";
+import fetch from "node-fetch";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export const config = {
-  api: {
-    bodyParser: false, // disable default body parser to handle multipart/form-data
-  },
-};
+async function fetchAsBuffer(url, label = "file") {
+  if (!url) return null;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Could not fetch ${label}: ${resp.status}`);
+    return Buffer.from(await resp.arrayBuffer());
+  } catch (err) {
+    console.warn(`Failed to fetch ${label}:`, err.message);
+    return null;
+  }
+}
 
 export async function handler(event) {
   try {
-    if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: "Method Not Allowed" };
-    }
+    if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
 
-    // Parse FormData
-    const form = new formidable.IncomingForm();
-    const formData = await new Promise((resolve, reject) => {
-      form.parse(event, (err, fields, files) => {
-        if (err) reject(err);
-        else resolve({ fields, files });
-      });
-    });
+    const fields = JSON.parse(event.body || "{}");
 
-    const { fields, files } = formData;
+    // Convert passport to buffer
+    const passportBuffer = await fetchAsBuffer(fields.passportUrl, "passport");
 
-    // Convert uploaded files to buffers
-    const passportBuffer = files.passportFile
-      ? fs.readFileSync(files.passportFile.filepath)
-      : null;
-    const olevelBuffer = files.olevelFile
-      ? fs.readFileSync(files.olevelFile.filepath)
-      : null;
+    // Generate PDF slip
+    const slipBuffer = await generateSlip({ ...fields, passport: passportBuffer });
 
-    // Generate PDF slip (no payment)
-    const slipBuffer = await generateSlip(
-      { ...fields, passport: passportBuffer },
-      { reference: "N/A", amount: 0, paidAt: null }
-    );
-
-    // Compose Admin email
+    // Admin email
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -78,11 +63,10 @@ Phone: ${fields.nok_phone || "N/A"}
 Address: ${fields.nok_address || "N/A"}
 
 --- Uploads ---
-Passport: ${files.passportFile ? files.passportFile.originalFilename : "N/A"}
-O’Level: ${files.olevelFile ? files.olevelFile.originalFilename : "N/A"}
+Passport: ${fields.passportUrl || "N/A"}
+O’Level: ${fields.olevelUrl || "N/A"}
 `.trim();
 
-    // Send admin email
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: "ogbomosocollegeofnursingscienc@gmail.com",
@@ -98,7 +82,7 @@ O’Level: ${files.olevelFile ? files.olevelFile.originalFilename : "N/A"}
       ],
     });
 
-    // Send student email
+    // Student email
     if (fields.email) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
@@ -108,8 +92,8 @@ Dear ${fields.surname || "Applicant"},
 📎 Your Acknowledgment Slip is attached to this email.
 
 📌 For your records:
-• Passport: ${files.passportFile ? files.passportFile.originalFilename : "N/A"}
-• O’Level: ${files.olevelFile ? files.olevelFile.originalFilename : "N/A"}
+• Passport: ${fields.passportUrl || "N/A"}
+• O’Level: ${fields.olevelUrl || "N/A"}
 
 Please save these documents and bring the slip on exam day.
 
@@ -135,19 +119,9 @@ OCNS Admissions Team
       });
     }
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        passportName: files.passportFile?.originalFilename || null,
-        olevelName: files.olevelFile?.originalFilename || null,
-      }),
-    };
+    return { statusCode: 200, body: JSON.stringify({ success: true }) };
   } catch (error) {
     console.error("❌ Error in sendEmail:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: error.message }),
-    };
+    return { statusCode: 500, body: JSON.stringify({ success: false, error: error.message }) };
   }
-          }
+  }
