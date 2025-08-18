@@ -1,32 +1,49 @@
+// netlify/functions/sendEmail.js
 import { Resend } from "resend";
 import generateSlip from "../../utils/generateSlip.js";
-import Busboy from "busboy";
+import formidable from "formidable";
+import fs from "fs";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+export const config = {
+  api: {
+    bodyParser: false, // disable default body parser to handle multipart/form-data
+  },
+};
+
 export async function handler(event) {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
-  const fields = {};
-  const files = {};
-
-  // parse multipart/form-data
-  const busboy = Busboy({ headers: event.headers });
-  busboy.on("field", (name, value) => { fields[name] = value; });
-  busboy.on("file", (name, file) => {
-    const chunks = [];
-    file.on("data", (chunk) => chunks.push(chunk));
-    file.on("end", () => { files[name] = Buffer.concat(chunks); });
-  });
-
-  await new Promise((resolve) => busboy.end(Buffer.from(event.body, "base64")).on("finish", resolve));
-
   try {
-    const slipBuffer = await generateSlip({ ...fields, passport: files.passport });
+    if (event.httpMethod !== "POST") {
+      return { statusCode: 405, body: "Method Not Allowed" };
+    }
 
-    // Compose Admin email body with all form fields
+    // Parse FormData
+    const form = new formidable.IncomingForm();
+    const formData = await new Promise((resolve, reject) => {
+      form.parse(event, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve({ fields, files });
+      });
+    });
+
+    const { fields, files } = formData;
+
+    // Convert uploaded files to buffers
+    const passportBuffer = files.passportFile
+      ? fs.readFileSync(files.passportFile.filepath)
+      : null;
+    const olevelBuffer = files.olevelFile
+      ? fs.readFileSync(files.olevelFile.filepath)
+      : null;
+
+    // Generate PDF slip (no payment)
+    const slipBuffer = await generateSlip(
+      { ...fields, passport: passportBuffer },
+      { reference: "N/A", amount: 0, paidAt: null }
+    );
+
+    // Compose Admin email
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -61,22 +78,27 @@ Phone: ${fields.nok_phone || "N/A"}
 Address: ${fields.nok_address || "N/A"}
 
 --- Uploads ---
-Passport: ${files.passport ? "Attached" : "N/A"}
-O’Level: ${files.olevel ? "Attached" : "N/A"}
+Passport: ${files.passportFile ? files.passportFile.originalFilename : "N/A"}
+O’Level: ${files.olevelFile ? files.olevelFile.originalFilename : "N/A"}
 `.trim();
 
-    // Send Admin Email
+    // Send admin email
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: "ogbomosocollegeofnursingscienc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
       attachments: [
-        { content: slipBuffer.toString("base64"), filename: `${fields.surname || "applicant"}_slip.pdf`, type: "application/pdf", disposition: "attachment" }
+        {
+          content: slipBuffer.toString("base64"),
+          filename: `${fields.surname || "applicant"}_slip.pdf`,
+          type: "application/pdf",
+          disposition: "attachment",
+        },
       ],
     });
 
-    // Compose Student Email
+    // Send student email
     if (fields.email) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
@@ -86,8 +108,8 @@ Dear ${fields.surname || "Applicant"},
 📎 Your Acknowledgment Slip is attached to this email.
 
 📌 For your records:
-• Passport: ${files.passport ? "Attached" : "N/A"}
-• O’Level: ${files.olevel ? "Attached" : "N/A"}
+• Passport: ${files.passportFile ? files.passportFile.originalFilename : "N/A"}
+• O’Level: ${files.olevelFile ? files.olevelFile.originalFilename : "N/A"}
 
 Please save these documents and bring the slip on exam day.
 
@@ -103,14 +125,29 @@ OCNS Admissions Team
         subject: "✅ Application Received - Ogbomoso College of Nursing Science",
         text: studentBody,
         attachments: [
-          { content: slipBuffer.toString("base64"), filename: `${fields.surname || "applicant"}_slip.pdf`, type: "application/pdf", disposition: "attachment" }
+          {
+            content: slipBuffer.toString("base64"),
+            filename: `${fields.surname || "applicant"}_slip.pdf`,
+            type: "application/pdf",
+            disposition: "attachment",
+          },
         ],
       });
     }
 
-    return { statusCode: 200, body: JSON.stringify({ success: true }) };
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        success: true,
+        passportName: files.passportFile?.originalFilename || null,
+        olevelName: files.olevelFile?.originalFilename || null,
+      }),
+    };
   } catch (error) {
-    console.error("Error sending email:", error);
-    return { statusCode: 500, body: JSON.stringify({ success: false, error: error.message }) };
+    console.error("❌ Error in sendEmail:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ success: false, error: error.message }),
+    };
   }
-}
+          }
