@@ -1,23 +1,24 @@
-  // generateSlip.js
+// generateSlip.js
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-module.exports = function generateSlip(formData, paymentData, passportPath) { // <-- accepts optional 3rd param
+module.exports = function generateSlip(formData, paymentData, passportPath) {
   return new Promise((resolve, reject) => {
     try {
-      // Save to serverless tmp
       const slipPath = path.join(os.tmpdir(), `acknowledgment_${Date.now()}.pdf`);
       const doc = new PDFDocument({ margin: 50 });
-
       const writeStream = fs.createWriteStream(slipPath);
       doc.pipe(writeStream);
 
-      // Header bar
+      // ====== Generate Reg Number ======
+      const regNumber = `OGCN-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      // ====== Header bar ======
       doc.rect(0, 0, doc.page.width, 80).fill('#1155cc');
 
-      // --- Logo (try multiple common locations) ---
+      // --- Logo ---
       const candidateLogoPaths = [
         path.join(__dirname, 'logo.png'),
         path.join(__dirname, 'images', 'logo.png'),
@@ -31,31 +32,30 @@ module.exports = function generateSlip(formData, paymentData, passportPath) { //
       }
 
       // --- Passport (top-right) ---
-      const pp = passportPath || formData.passportPath; // use passed path if provided
+      const pp = passportPath || formData.passportPath;
       if (pp && typeof pp === 'string' && fs.existsSync(pp)) {
         const x = doc.page.width - 120;
         const y = 15;
-        doc.rect(x - 5, y - 5, 90, 110).stroke('#1155cc'); // frame
+        doc.rect(x - 5, y - 5, 90, 110).stroke('#1155cc');
         doc.image(pp, x, y, { width: 80, height: 100, fit: [80, 100] });
       }
 
-      // Title
+      // ====== Title ======
       doc.fillColor('#ffffff').fontSize(20)
         .text('Ogbomoso College of Nursing Science', 120, 25);
-
       doc.fillColor('#000000');
       doc.moveDown(6);
       doc.fontSize(16).text('Acknowledgment Slip', { align: 'center' });
 
-      // Data helpers
+      // ====== Student Info ======
       const fullName =
         formData.fullname ||
         `${formData.surname || ''} ${formData.othernames || ''}`.trim() ||
         formData.fullName || 'N/A';
 
-      // Details
       doc.moveDown(2);
       doc.fontSize(12)
+        .text(`Reg. Number: ${regNumber}`)
         .text(`Name: ${fullName}`)
         .text(`Email: ${formData.email || 'N/A'}`)
         .text(`Phone: ${formData.phone || 'N/A'}`)
@@ -67,7 +67,7 @@ module.exports = function generateSlip(formData, paymentData, passportPath) { //
       doc.moveDown(2);
       doc.text('Please bring this slip on the exam day.', { align: 'center' });
 
-      // WhatsApp info (optional)
+      // ====== WhatsApp info ======
       doc.moveDown(1);
       doc.fillColor('#1155cc').fontSize(12)
         .text('Join our Aspirant WhatsApp Group:', { align: 'center' });
@@ -78,12 +78,12 @@ module.exports = function generateSlip(formData, paymentData, passportPath) { //
           underline: true,
         });
 
-      // Border
+      // ====== Border ======
       doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40)
         .lineWidth(2)
         .stroke('#1155cc');
 
-      // --- Text-based Seal (bottom-right) ---
+      // ====== Text Seal ======
       const cx = doc.page.width - 110;
       const cy = doc.page.height - 120;
       doc.save();
