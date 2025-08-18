@@ -21,23 +21,21 @@ async function fetchAsBase64(url) {
 }
 
 export async function handler(event) {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
+  }
+
+  let fields;
   try {
-    if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: "Method Not Allowed" };
-    }
+    fields = JSON.parse(event.body || "{}");
+  } catch {
+    return { statusCode: 400, body: JSON.stringify({ success: false, error: "Invalid JSON" }) };
+  }
 
-    // Expect JSON body
-    const fields = JSON.parse(event.body || "{}");
+  let slipUrl = null;
 
-    // Build payment data
-    const paymentData = {
-      reference: fields.paymentReference || "N/A",
-      amount: 16000 * 100, // kobo
-      status: "success",
-      paidAt: new Date().toISOString(),
-    };
-
-    // Prepare passport for slip: turn URL -> base64 so PDFKit can embed
+  try {
+    // Convert passport URL -> base64
     let passportBase64 = null;
     if (fields.passportUrl) {
       try {
@@ -47,17 +45,16 @@ export async function handler(event) {
       }
     }
 
-    // Generate PDF (returns base64)
-    const slipBase64 = await generateSlip(
-      {
-        ...fields,
-        // pass base64 for embedding
-        passport: passportBase64,
-      },
-      paymentData
-    );
+    // Generate PDF slip
+    const paymentData = {
+      reference: fields.paymentReference || "N/A",
+      amount: 16000 * 100,
+      status: "success",
+      paidAt: new Date().toISOString(),
+    };
+    const slipBase64 = await generateSlip({ ...fields, passport: passportBase64 }, paymentData);
 
-    // Upload slip to Cloudinary (as data URI)
+    // Upload to Cloudinary
     const slipDataUri = `data:application/pdf;base64,${slipBase64}`;
     const slipUpload = await cloudinary.uploader.upload(slipDataUri, {
       folder: "admissions/slips",
@@ -65,9 +62,16 @@ export async function handler(event) {
       public_id: `${(fields.surname || "applicant")}_${paymentData.reference}`.replace(/\s+/g, "_"),
       overwrite: true,
     });
-    const slipUrl = slipUpload.secure_url;
+    slipUrl = slipUpload.secure_url;
 
-    // Compose Admin email (with links)
+  } catch (e) {
+    console.error("❌ Slip generation/upload failed:", e);
+    return { statusCode: 500, body: JSON.stringify({ success: false, error: "Slip generation/upload failed: " + e.message }) };
+  }
+
+  const results = { admin: null, student: null };
+  try {
+    // Admin email
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -115,14 +119,18 @@ Status: ${paymentData.status}
 ${slipUrl}
 `.trim();
 
-    await resend.emails.send({
+    results.admin = await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: "ogbomosocollegeofnursingscienc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
     });
+  } catch (e) {
+    console.error("❌ Admin email failed:", e);
+  }
 
-    // Student email (link only, no attachment)
+  try {
+    // Student email
     if (fields.email) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
@@ -144,25 +152,25 @@ Best regards,
 OCNS Admissions Team
 `.trim();
 
-      await resend.emails.send({
+      results.student = await resend.emails.send({
         from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
         to: fields.email,
         subject: "✅ Application Received - Ogbomoso College of Nursing Science",
         text: studentBody,
       });
     }
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        slipUrl,
-        passportUrl: fields.passportUrl || null,
-        olevelUrl: fields.olevelUrl || null,
-      }),
-    };
-  } catch (error) {
-    console.error("❌ Error in sendEmail:", error);
-    return { statusCode: 500, body: JSON.stringify({ success: false, error: error.message }) };
+  } catch (e) {
+    console.error("❌ Student email failed:", e);
   }
-}
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      success: true,
+      slipUrl,
+      emails: results,
+      passportUrl: fields.passportUrl || null,
+      olevelUrl: fields.olevelUrl || null,
+    }),
+  };
+};
