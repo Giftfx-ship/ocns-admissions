@@ -1,14 +1,9 @@
-// form.js
 const form = document.querySelector("#applicationForm");
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const formData = new FormData(form);
-
-  // Convert uploaded files to actual file names for email display
-  const passportFile = formData.get("passport");
-  const olevelFile = formData.get("olevel");
 
   const payload = {
     surname: formData.get("surname"),
@@ -35,25 +30,15 @@ form.addEventListener("submit", async (e) => {
     nok_relationship: formData.get("nok_relationship"),
     nok_phone: formData.get("nok_phone"),
     nok_address: formData.get("nok_address"),
-    notes: formData.get("notes"),
-    passportName: passportFile ? passportFile.name : null,
-    olevelName: olevelFile ? olevelFile.name : null,
+    passportUrl: formData.get("passport")?.name || null,
+    olevelUrl: formData.get("olevel")?.name || null,
   };
-
-  // Prepare FormData for file uploads
-  const uploadData = new FormData();
-  Object.entries(payload).forEach(([key, value]) => {
-    uploadData.append(key, value);
-  });
-  if (passportFile) uploadData.append("passportFile", passportFile);
-  if (olevelFile) uploadData.append("olevelFile", olevelFile);
 
   try {
     const res = await fetch("/.netlify/functions/sendEmail", {
       method: "POST",
-      body: uploadData, // sending FormData directly now
+      body: JSON.stringify(payload),
     });
-
     const data = await res.json();
     if (data.success) {
       alert("Application submitted successfully! Check your email for your slip.");
