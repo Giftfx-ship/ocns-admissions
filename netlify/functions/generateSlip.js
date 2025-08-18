@@ -3,7 +3,7 @@ import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
 
-export default function generateSlip(formData, paymentData) {
+export default function generateSlip(formData) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50 });
@@ -50,7 +50,7 @@ export default function generateSlip(formData, paymentData) {
 
       doc.moveDown(2);
 
-      // DETAILS
+      // DETAILS (without payment info)
       const textFields = [
         ["Surname", formData.surname],
         ["Other Names", formData.othernames],
@@ -63,9 +63,6 @@ export default function generateSlip(formData, paymentData) {
         ["Address", formData.address],
         ["Course", formData.course || "Basic Nursing"],
         ["Exam Month", formData.exam_month || "September"],
-        ["Payment Reference", paymentData.reference],
-        ["Amount Paid", paymentData.amount ? (paymentData.amount / 100).toFixed(2) : "0.00"],
-        ["Payment Date", paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() : "N/A"],
       ];
 
       doc.fontSize(12);
