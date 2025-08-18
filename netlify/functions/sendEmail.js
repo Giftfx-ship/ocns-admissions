@@ -1,48 +1,32 @@
-// netlify/functions/sendEmail.js
 import { Resend } from "resend";
 import generateSlip from "../../utils/generateSlip.js";
-import fetch from "node-fetch";
+import Busboy from "busboy";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Safe fetch helper: converts image URL -> buffer
-async function fetchAsBuffer(url, label = "file") {
-  if (!url) {
-    console.warn(`No URL provided for ${label}. Skipping.`);
-    return null;
-  }
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`Could not fetch ${label}: ${resp.status}`);
-    return Buffer.from(await resp.arrayBuffer());
-  } catch (err) {
-    console.warn(`Failed to fetch ${label}:`, err.message);
-    return null;
-  }
-}
-
 export async function handler(event) {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
+  }
+
+  const fields = {};
+  const files = {};
+
+  // parse multipart/form-data
+  const busboy = Busboy({ headers: event.headers });
+  busboy.on("field", (name, value) => { fields[name] = value; });
+  busboy.on("file", (name, file) => {
+    const chunks = [];
+    file.on("data", (chunk) => chunks.push(chunk));
+    file.on("end", () => { files[name] = Buffer.concat(chunks); });
+  });
+
+  await new Promise((resolve) => busboy.end(Buffer.from(event.body, "base64")).on("finish", resolve));
+
   try {
-    if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: "Method Not Allowed" };
-    }
+    const slipBuffer = await generateSlip({ ...fields, passport: files.passport });
 
-    const fields = JSON.parse(event.body || "{}");
-
-    // Convert uploaded files to buffers
-    const passportBuffer = await fetchAsBuffer(fields.passportUrl, "passport");
-    const olevelBuffer = await fetchAsBuffer(fields.olevelUrl, "O’Level");
-
-    // Generate PDF slip (no payment)
-    const slipBuffer = await generateSlip(
-      { ...fields, passport: passportBuffer },
-      { reference: "N/A", amount: 0, paidAt: null }
-    );
-
-    // Convert PDF buffer to data URI for email attachment
-    const slipDataUri = `data:application/pdf;base64,${slipBuffer.toString("base64")}`;
-
-    // Compose Admin email
+    // Compose Admin email body with all form fields
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -77,27 +61,22 @@ Phone: ${fields.nok_phone || "N/A"}
 Address: ${fields.nok_address || "N/A"}
 
 --- Uploads ---
-Passport: ${fields.passportUrl || "N/A"}
-O’Level: ${fields.olevelUrl || "N/A"}
+Passport: ${files.passport ? "Attached" : "N/A"}
+O’Level: ${files.olevel ? "Attached" : "N/A"}
 `.trim();
 
-    // Send admin email
+    // Send Admin Email
     await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: "ogbomosocollegeofnursingscienc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
       attachments: [
-        {
-          content: slipBuffer.toString("base64"),
-          filename: `${fields.surname || "applicant"}_slip.pdf`,
-          type: "application/pdf",
-          disposition: "attachment",
-        },
+        { content: slipBuffer.toString("base64"), filename: `${fields.surname || "applicant"}_slip.pdf`, type: "application/pdf", disposition: "attachment" }
       ],
     });
 
-    // Send student email
+    // Compose Student Email
     if (fields.email) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
@@ -107,8 +86,8 @@ Dear ${fields.surname || "Applicant"},
 📎 Your Acknowledgment Slip is attached to this email.
 
 📌 For your records:
-• Passport: ${fields.passportUrl || "N/A"}
-• O’Level: ${fields.olevelUrl || "N/A"}
+• Passport: ${files.passport ? "Attached" : "N/A"}
+• O’Level: ${files.olevel ? "Attached" : "N/A"}
 
 Please save these documents and bring the slip on exam day.
 
@@ -124,29 +103,14 @@ OCNS Admissions Team
         subject: "✅ Application Received - Ogbomoso College of Nursing Science",
         text: studentBody,
         attachments: [
-          {
-            content: slipBuffer.toString("base64"),
-            filename: `${fields.surname || "applicant"}_slip.pdf`,
-            type: "application/pdf",
-            disposition: "attachment",
-          },
+          { content: slipBuffer.toString("base64"), filename: `${fields.surname || "applicant"}_slip.pdf`, type: "application/pdf", disposition: "attachment" }
         ],
       });
     }
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        passportUrl: fields.passportUrl || null,
-        olevelUrl: fields.olevelUrl || null,
-      }),
-    };
+    return { statusCode: 200, body: JSON.stringify({ success: true }) };
   } catch (error) {
-    console.error("❌ Error in sendEmail:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: error.message }),
-    };
+    console.error("Error sending email:", error);
+    return { statusCode: 500, body: JSON.stringify({ success: false, error: error.message }) };
   }
-            }
+}
