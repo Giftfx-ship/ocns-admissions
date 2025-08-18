@@ -51,7 +51,7 @@ form.addEventListener("submit", async (e) => {
   try {
     const res = await fetch("/.netlify/functions/sendEmail", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: uploadData, // sending FormData directly now
     });
 
     const data = await res.json();
