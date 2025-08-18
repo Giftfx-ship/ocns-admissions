@@ -12,49 +12,49 @@ cloudinary.config({
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Helper: fetch Cloudinary image -> base64
-async function fetchAsBase64(url) {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`Could not fetch image: ${resp.status}`);
-  const buf = Buffer.from(await resp.arrayBuffer());
-  return buf.toString("base64");
+// Safe fetch helper: converts image URL -> base64
+async function fetchAsBase64Safe(url, label = "file") {
+  if (!url) {
+    console.warn(`No URL provided for ${label}. Skipping.`);
+    return null;
+  }
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Could not fetch ${label}: ${resp.status}`);
+    const buf = Buffer.from(await resp.arrayBuffer());
+    return buf.toString("base64");
+  } catch (err) {
+    console.warn(`Failed to fetch ${label}:`, err.message);
+    return null;
+  }
 }
 
 export async function handler(event) {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
-  let fields;
   try {
-    fields = JSON.parse(event.body || "{}");
-  } catch {
-    return { statusCode: 400, body: JSON.stringify({ success: false, error: "Invalid JSON" }) };
-  }
-
-  let slipUrl = null;
-
-  try {
-    // Convert passport URL -> base64
-    let passportBase64 = null;
-    if (fields.passportUrl) {
-      try {
-        passportBase64 = await fetchAsBase64(fields.passportUrl);
-      } catch (e) {
-        console.warn("Passport fetch failed:", e.message);
-      }
+    if (event.httpMethod !== "POST") {
+      return { statusCode: 405, body: "Method Not Allowed" };
     }
 
-    // Generate PDF slip
+    const fields = JSON.parse(event.body || "{}");
+
     const paymentData = {
       reference: fields.paymentReference || "N/A",
-      amount: 16000 * 100,
+      amount: 16000 * 100, // kobo
       status: "success",
       paidAt: new Date().toISOString(),
     };
-    const slipBase64 = await generateSlip({ ...fields, passport: passportBase64 }, paymentData);
 
-    // Upload to Cloudinary
+    // Convert uploaded files to base64 safely
+    const passportBase64 = await fetchAsBase64Safe(fields.passportUrl, "passport");
+    const olevelBase64 = await fetchAsBase64Safe(fields.olevelUrl, "O’Level");
+
+    // Generate PDF (returns base64)
+    const slipBase64 = await generateSlip(
+      { ...fields, passport: passportBase64 },
+      paymentData
+    );
+
+    // Upload PDF slip to Cloudinary
     const slipDataUri = `data:application/pdf;base64,${slipBase64}`;
     const slipUpload = await cloudinary.uploader.upload(slipDataUri, {
       folder: "admissions/slips",
@@ -62,16 +62,9 @@ export async function handler(event) {
       public_id: `${(fields.surname || "applicant")}_${paymentData.reference}`.replace(/\s+/g, "_"),
       overwrite: true,
     });
-    slipUrl = slipUpload.secure_url;
+    const slipUrl = slipUpload.secure_url;
 
-  } catch (e) {
-    console.error("❌ Slip generation/upload failed:", e);
-    return { statusCode: 500, body: JSON.stringify({ success: false, error: "Slip generation/upload failed: " + e.message }) };
-  }
-
-  const results = { admin: null, student: null };
-  try {
-    // Admin email
+    // Compose Admin email
     const adminBody = `
 📩 NEW STUDENT APPLICATION
 
@@ -119,18 +112,14 @@ Status: ${paymentData.status}
 ${slipUrl}
 `.trim();
 
-    results.admin = await resend.emails.send({
+    await resend.emails.send({
       from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
       to: "ogbomosocollegeofnursingscienc@gmail.com",
       subject: "📩 New Student Registration Submitted",
       text: adminBody,
     });
-  } catch (e) {
-    console.error("❌ Admin email failed:", e);
-  }
 
-  try {
-    // Student email
+    // Compose Student email
     if (fields.email) {
       const studentBody = `
 Dear ${fields.surname || "Applicant"},
@@ -152,25 +141,28 @@ Best regards,
 OCNS Admissions Team
 `.trim();
 
-      results.student = await resend.emails.send({
+      await resend.emails.send({
         from: "Ogbomoso College <no-reply@ogbomosocollegeofnursingscience.onresend.com>",
         to: fields.email,
         subject: "✅ Application Received - Ogbomoso College of Nursing Science",
         text: studentBody,
       });
     }
-  } catch (e) {
-    console.error("❌ Student email failed:", e);
-  }
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      success: true,
-      slipUrl,
-      emails: results,
-      passportUrl: fields.passportUrl || null,
-      olevelUrl: fields.olevelUrl || null,
-    }),
-  };
-};
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        success: true,
+        slipUrl,
+        passportUrl: fields.passportUrl || null,
+        olevelUrl: fields.olevelUrl || null,
+      }),
+    };
+  } catch (error) {
+    console.error("❌ Error in sendEmail:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ success: false, error: error.message }),
+    };
+  }
+           }
