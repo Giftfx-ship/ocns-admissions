@@ -1,3 +1,4 @@
+// utils/generateSlip.js
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
@@ -21,7 +22,7 @@ export default function generateSlip(formData) {
         }
       } catch {}
 
-      // PASSPORT
+      // PASSPORT (direct buffer)
       if (formData.passport) {
         try {
           doc
@@ -89,4 +90,4 @@ export default function generateSlip(formData) {
       reject(error);
     }
   });
-  }
+                         }
