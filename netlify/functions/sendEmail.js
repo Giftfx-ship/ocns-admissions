@@ -23,7 +23,6 @@ exports.handler = async (event) => {
     const tmpdir = os.tmpdir();
     const fileWritePromises = [];
 
-    // ✅ supports both old & new busboy signatures
     bb.on('file', (fieldname, file, infoOrFilename) => {
       const filename = typeof infoOrFilename === 'string'
         ? infoOrFilename
@@ -58,6 +57,7 @@ exports.handler = async (event) => {
       try {
         await Promise.all(fileWritePromises);
 
+        // Minimal payment summary
         const paymentData = {
           reference: fields.paymentReference || 'N/A',
           amount: 0,
@@ -65,16 +65,15 @@ exports.handler = async (event) => {
           status: 'Not verified',
         };
 
-        // Helper to normalize single/multiple upload fields
-        const getSingleFile = (fileField) => Array.isArray(fileField) ? fileField[0] : fileField;
+        // Generate slip (logo only, no passport)
+        const slipPath = await generateSlip(fields, paymentData);
 
+        // Helper for single file
+        const getSingleFile = (fileField) => Array.isArray(fileField) ? fileField[0] : fileField;
         const olevelFile = getSingleFile(files.olevel);
         const passportFile = getSingleFile(files.passport);
 
-        // 🔗 pass passport path into the slip generator
-        const passportPath = (passportFile && typeof passportFile.path === 'string') ? passportFile.path : null;
-        const slipPath = await generateSlip(fields, paymentData, passportPath);
-
+        // Configure transporter
         const transporter = nodemailer.createTransport({
           service: 'gmail',
           auth: {
@@ -83,22 +82,13 @@ exports.handler = async (event) => {
           },
         });
 
-        const attachments = [
-          { filename: 'acknowledgment_slip.pdf', path: slipPath },
-        ];
-        if (olevelFile && typeof olevelFile.path === 'string') {
-          attachments.push({ filename: olevelFile.filename, path: olevelFile.path });
-        }
-        if (passportFile && typeof passportFile.path === 'string') {
-          attachments.push({ filename: passportFile.filename, path: passportFile.path });
-        }
+        // Attachments
+        const attachments = [{ filename: 'acknowledgment_slip.pdf', path: slipPath }];
+        if (olevelFile && olevelFile.path) attachments.push({ filename: olevelFile.filename, path: olevelFile.path });
+        if (passportFile && passportFile.path) attachments.push({ filename: passportFile.filename, path: passportFile.path });
 
-        // === Admin Email (unchanged body, just ensures slip + uploads) ===
-        await transporter.sendMail({
-          from: 'ogbomosocollegeofnursingscienc@gmail.com',
-          to: 'ogbomosocollegeofnursingscienc@gmail.com',
-          subject: 'New Student Registration Submitted',
-          text: `
+        // === Admin Email with ALL fields ===
+        const adminBody = `
 A new student has submitted their application.
 
 --- Personal Info ---
@@ -108,16 +98,16 @@ Gender: ${fields.gender || 'N/A'}
 Marital Status: ${fields.marital_status || 'N/A'}
 Date of Birth: ${fields.dob || 'N/A'}
 Religion: ${fields.religion || 'N/A'}
+State of Origin: ${fields.state_origin || 'N/A'}
+LGA: ${fields.lga || 'N/A'}
+Address: ${fields.address || 'N/A'}
 
 --- Contact ---
 Email: ${fields.email || 'N/A'}
 Phone: ${fields.phone || 'N/A'}
 Country: ${fields.country || 'N/A'}
-State of Origin: ${fields.state_origin || 'N/A'}
 State: ${fields.state || 'N/A'}
-LGA: ${fields.lga || 'N/A'}
 Home Town: ${fields.hometown || 'N/A'}
-Address: ${fields.address || 'N/A'}
 
 --- Sponsor Info ---
 Name: ${fields.sponsor_name || 'N/A'}
@@ -138,11 +128,17 @@ Date Paid: ${paymentData.paidAt ? new Date(paymentData.paidAt).toLocaleString() 
 Status: ${paymentData.status}
 
 Attached: acknowledgment slip + uploaded files.
-          `,
+`;
+
+        await transporter.sendMail({
+          from: 'ogbomosocollegeofnursingscienc@gmail.com',
+          to: 'ogbomosocollegeofnursingscienc@gmail.com',
+          subject: 'New Student Registration Submitted',
+          text: adminBody,
           attachments,
         });
 
-        // === Student Email (NEW) — sends the slip ===
+        // === Student Email with slip only ===
         if (fields.email) {
           await transporter.sendMail({
             from: 'ogbomosocollegeofnursingscienc@gmail.com',
@@ -151,7 +147,6 @@ Attached: acknowledgment slip + uploaded files.
             text: `Dear ${fields.surname || fields.othernames || 'Applicant'},
 
 Your application has been received successfully.
-
 Payment Reference: ${paymentData.reference}
 
 Please find your acknowledgment slip attached.
@@ -161,11 +156,11 @@ Ogbomoso College of Nursing Science`,
           });
         }
 
-        // Cleanup temp files AFTER both emails
+        // Cleanup temp files
         const clean = (f) => { try { fs.unlinkSync(f); } catch {} };
         clean(slipPath);
-        if (olevelFile && typeof olevelFile.path === 'string') clean(olevelFile.path);
-        if (passportFile && typeof passportFile.path === 'string') clean(passportFile.path);
+        if (olevelFile && olevelFile.path) clean(olevelFile.path);
+        if (passportFile && passportFile.path) clean(passportFile.path);
 
         resolve({
           statusCode: 200,
