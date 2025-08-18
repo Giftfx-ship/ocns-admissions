@@ -4,10 +4,17 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+function generateRegNumber() {
+  const prefix = "OGCONS"; // Ogbomoso College of Nursing
+  const date = new Date();
+  const year = date.getFullYear().toString().slice(-2); // last 2 digits of year
+  const randomNum = Math.floor(1000 + Math.random() * 9000); // 4-digit random
+  return `${prefix}${year}${randomNum}`;
+}
+
 module.exports = function generateSlip(formData, paymentData) {
   return new Promise((resolve, reject) => {
     try {
-      // Temporary file path
       const slipPath = path.join(os.tmpdir(), `acknowledgment_${Date.now()}.pdf`);
       const doc = new PDFDocument({ margin: 50 });
 
@@ -17,18 +24,13 @@ module.exports = function generateSlip(formData, paymentData) {
       // Header bar
       doc.rect(0, 0, doc.page.width, 80).fill('#1155cc');
 
-      // Logo (top-left)
-      const candidateLogoPaths = [
-        path.join(__dirname, 'logo.png'),
-        path.join(__dirname, 'images', 'logo.png'),
-        path.join(process.cwd(), 'images', 'logo.png'),
-      ];
-      const logoPath = candidateLogoPaths.find(p => fs.existsSync(p));
-      if (logoPath) {
+      // Logo
+      const logoPath = path.join(__dirname, 'logo.png');
+      if (fs.existsSync(logoPath)) {
         doc.image(logoPath, 50, 15, { width: 50, height: 50 });
       }
 
-      // School title
+      // Title
       doc.fillColor('#ffffff').fontSize(20)
         .text('Ogbomoso College of Nursing Science', 120, 25);
 
@@ -36,10 +38,18 @@ module.exports = function generateSlip(formData, paymentData) {
       doc.moveDown(6);
       doc.fontSize(16).text('Acknowledgment Slip', { align: 'center' });
 
-      // Student details
-      const fullName = formData.fullname || `${formData.surname || ''} ${formData.othernames || ''}`.trim() || 'N/A';
+      // Generate reg number
+      const regNumber = generateRegNumber();
+
+      const fullName =
+        formData.fullname ||
+        `${formData.surname || ''} ${formData.othernames || ''}`.trim() ||
+        formData.fullName || 'N/A';
+
+      // Details
       doc.moveDown(2);
       doc.fontSize(12)
+        .text(`Registration Number: ${regNumber}`)
         .text(`Name: ${fullName}`)
         .text(`Email: ${formData.email || 'N/A'}`)
         .text(`Phone: ${formData.phone || 'N/A'}`)
@@ -51,23 +61,7 @@ module.exports = function generateSlip(formData, paymentData) {
       doc.moveDown(2);
       doc.text('Please bring this slip on the exam day.', { align: 'center' });
 
-      // WhatsApp info
-      doc.moveDown(1);
-      doc.fillColor('#1155cc').fontSize(12)
-        .text('Join our Aspirant WhatsApp Group:', { align: 'center' });
-      doc.fillColor('blue')
-        .text('https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t', {
-          align: 'center',
-          link: 'https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t',
-          underline: true,
-        });
-
-      // Border
-      doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40)
-        .lineWidth(2)
-        .stroke('#1155cc');
-
-      // Text-based seal (bottom-right)
+      // Text-based Seal (bottom-right)
       const cx = doc.page.width - 110;
       const cy = doc.page.height - 120;
       doc.save();
