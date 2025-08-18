@@ -1,4 +1,3 @@
-// utils/generateSlip.js
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
@@ -22,7 +21,7 @@ export default function generateSlip(formData) {
         }
       } catch {}
 
-      // PASSPORT (direct buffer)
+      // PASSPORT
       if (formData.passport) {
         try {
           doc
@@ -50,7 +49,7 @@ export default function generateSlip(formData) {
 
       doc.moveDown(2);
 
-      // DETAILS (without payment info)
+      // DETAILS
       const textFields = [
         ["Surname", formData.surname],
         ["Other Names", formData.othernames],
@@ -90,4 +89,4 @@ export default function generateSlip(formData) {
       reject(error);
     }
   });
-}
+  }
