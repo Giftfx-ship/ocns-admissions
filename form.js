@@ -6,7 +6,6 @@
 
   const form = document.getElementById("admissionForm");
   const messageBox = document.getElementById("formMessage");
-
   const passportInput = form.querySelector('[name="passport"]');
   const olevelInput = form.querySelector('[name="olevel"]');
 
@@ -34,7 +33,6 @@
 
   async function signedUpload(file, folder) {
     const sig = await getSignature(folder);
-
     const fd = new FormData();
     fd.append("file", file);
     fd.append("api_key", sig.apiKey);
@@ -49,34 +47,21 @@
     if (!up.ok || !data.secure_url) {
       throw new Error(data.error?.message || "Cloudinary upload failed");
     }
-
     return data.secure_url;
   }
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
 
-    if (!passportInput.files[0]) {
-      setStatus("Please upload your passport photograph.", true);
-      return;
-    }
-
-    if (!olevelInput.files[0]) {
-      setStatus("Please upload your O’Level result.", true);
-      return;
-    }
-
-    if (typeof PaystackPop === "undefined") {
-      setStatus('Paystack script not loaded.', true);
-      return;
-    }
-
-    disableForm(true);
-    setStatus("Opening Paystack…");
+    // Validation
+    if (!passportInput.files[0]) return setStatus("Please upload your passport photograph.", true);
+    if (!olevelInput.files[0]) return setStatus("Please upload your O’Level result.", true);
+    if (typeof PaystackPop === "undefined") return setStatus("Paystack script not loaded.", true);
 
     const fd = new FormData(form);
     const fields = Object.fromEntries(fd.entries());
 
+    // Setup Paystack
     const handler = PaystackPop.setup({
       key: PAYSTACK_PUBLIC_KEY,
       email: fields.email || "",
@@ -89,21 +74,16 @@
         ],
       },
       callback: function (response) {
+        // Handle payment success
         (async function () {
           try {
-            setStatus("Payment successful. Uploading your files…");
+            setStatus("Payment successful. Uploading files...");
+            disableForm(true);
 
             const passportUrl = await signedUpload(passportInput.files[0], "admissions/passports");
             const olevelUrl = await signedUpload(olevelInput.files[0], "admissions/olevels");
 
-            setStatus("Submitting your application…");
-
-            const payload = {
-              ...fields,
-              paymentReference: response.reference,
-              passportUrl,
-              olevelUrl,
-            };
+            const payload = { ...fields, paymentReference: response.reference, passportUrl, olevelUrl };
 
             const res = await fetch("/.netlify/functions/sendEmail", {
               method: "POST",
@@ -112,14 +92,12 @@
             });
 
             const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.success) {
-              throw new Error(data.error || `Submission failed (${res.status})`);
-            }
+            if (!res.ok || !data.success) throw new Error(data.error || "Submission failed");
 
-            setStatus("🎉 Application submitted! Check your email for confirmation and slip link.");
+            setStatus("🎉 Application submitted! Check your email for confirmation.");
             form.reset();
           } catch (err) {
-            setStatus(`❌ ${err.message || "Submission failed"}`, true);
+            setStatus(`❌ ${err.message}`, true);
           } finally {
             disableForm(false);
           }
@@ -131,6 +109,11 @@
       },
     });
 
-    handler.openIframe();
+    // Open Paystack popup immediately
+    try {
+      handler.openIframe();
+    } catch (err) {
+      setStatus("Unable to open Paystack popup. Please allow popups for this site.", true);
+    }
   });
 })();
