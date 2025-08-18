@@ -1,7 +1,7 @@
 // utils/generateSlip.js
 import PDFDocument from "pdfkit";
-import path from "path";
 import fs from "fs";
+import path from "path";
 
 export default function generateSlip(formData, paymentData) {
   return new Promise((resolve, reject) => {
@@ -9,10 +9,7 @@ export default function generateSlip(formData, paymentData) {
       const doc = new PDFDocument({ margin: 50 });
       const buffers = [];
       doc.on("data", (chunk) => buffers.push(chunk));
-      doc.on("end", () => {
-        const pdfBuffer = Buffer.concat(buffers);
-        resolve(pdfBuffer); // <-- return raw buffer for direct email attachment
-      });
+      doc.on("end", () => resolve(Buffer.concat(buffers)));
 
       // HEADER STRIP
       doc.rect(0, 0, doc.page.width, 80).fill("#1155cc");
@@ -25,12 +22,13 @@ export default function generateSlip(formData, paymentData) {
         }
       } catch {}
 
-      // PASSPORT (optional)
+      // PASSPORT (direct buffer)
       if (formData.passport) {
         try {
-          const passportBuffer = Buffer.from(formData.passport, "base64");
-          doc.image(passportBuffer, doc.page.width - 120, 15, { width: 80, height: 80 })
-            .rect(doc.page.width - 125, 10, 90, 90).stroke();
+          doc
+            .image(formData.passport, doc.page.width - 120, 15, { width: 80, height: 80 })
+            .rect(doc.page.width - 125, 10, 90, 90)
+            .stroke();
         } catch {
           console.warn("Invalid passport image, skipping.");
         }
@@ -42,7 +40,7 @@ export default function generateSlip(formData, paymentData) {
       doc.moveDown(6);
       doc.fontSize(18).text("Acknowledgment Slip", { align: "center", underline: true });
 
-      // WATERMARK
+      // WATERMARK (optional)
       try {
         const logoPath2 = path.join(process.cwd(), "images", "logo.png");
         if (fs.existsSync(logoPath2)) {
@@ -95,4 +93,4 @@ export default function generateSlip(formData, paymentData) {
       reject(error);
     }
   });
-        }
+}
