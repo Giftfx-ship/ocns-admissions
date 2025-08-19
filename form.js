@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const email = formData.get("email");
-    const amount = 100 * 100; // ₦100 for testing
+    const amount = 16000 * 100; // ₦100 for testing
 
     formMessage.textContent = "Processing payment...";
     formMessage.style.color = "blue";
