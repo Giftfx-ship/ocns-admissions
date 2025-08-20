@@ -4,7 +4,8 @@
   "description": "Ogbomoso College of Nursing Science registration portal",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "generate-sitemap": "node generate-sitemap.js"
   },
   "dependencies": {
     "express": "^4.18.2",
