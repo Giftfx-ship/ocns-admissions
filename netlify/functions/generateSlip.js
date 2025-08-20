@@ -36,7 +36,7 @@ module.exports = function generateSlip(formData, paymentData) {
 
       doc.fillColor('#000000');
       doc.moveDown(6);
-      doc.fontSize(16).text('Acknowledgment Slip', { align: 'center' });
+      doc.fontSize(14).text('OGBOMOSO COLLEGE OF NURSING SCIENCE ACKNOLEDGEMENT SLIP COMPLETED', { align: 'center' });
 
       // Generate reg number
       const regNumber = generateRegNumber();
@@ -50,16 +50,27 @@ module.exports = function generateSlip(formData, paymentData) {
       doc.moveDown(2);
       doc.fontSize(12)
         .text(`Registration Number: ${regNumber}`)
+        
         .text(`Name: ${fullName}`)
+        
         .text(`Email: ${formData.email || 'N/A'}`)
+        
         .text(`Phone: ${formData.phone || 'N/A'}`)
+        
         .text(`Course: Basic Nursing`)
+        
         .text(`Payment Reference: ${paymentData?.reference || 'N/A'}`)
+        
         .text(`Amount Paid: ₦${paymentData?.amount ? (paymentData.amount / 100).toFixed(2) : '0.00'}`)
+        
         .text(`Payment Date: ${paymentData?.paidAt ? new Date(paymentData.paidAt).toLocaleString() : 'N/A'}`);
 
-      doc.moveDown(2);
-      doc.text('Please bring this slip on the exam day.', { align: 'center' });
+      doc.moveDown(4);
+      doc.text( 'INSTRUCTIONS' )
+      doc.text( '1.You must possess at least four (4) credits at not more than two sittings in the SSCE/NECO or its equivalent.' )
+      doc.text( '2.If admitted, you are expected to make your own accommodation arrangements and pay all the levies prescribed by the College.' )
+      doc.text( '3.Ensure you print this copy(page) with the APPLICATION STATUS SHOWING COMPLETED.' )
+      doc.text( '4.Examination date will be communicated to you via the email you provided during registration.' )
 
       // Text-based Seal (bottom-right)
       const cx = doc.page.width - 110;
