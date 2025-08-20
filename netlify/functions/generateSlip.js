@@ -69,7 +69,7 @@ module.exports = function generateSlip(formData, paymentData) {
       doc.text( 'INSTRUCTIONS' )
       doc.text( '1.You must possess at least four (4) credits at not more than two sittings in the SSCE/NECO or its equivalent.' )
       doc.text( '2.If admitted, you are expected to make your own accommodation arrangements and pay all the levies prescribed by the College.' )
-      doc.text( '3.Ensure you print this copy(page) with the APPLICATION STATUS SHOWING COMPLETED.' )
+      doc.text( '3.Ensure you print this copy(page) coloured with the APPLICATION STATUS SHOWING COMPLETED.' )
       doc.text( '4.Examination date will be communicated to you via the email you provided during registration.' )
 
       // Text-based Seal (bottom-right)
