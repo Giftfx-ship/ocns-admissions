@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- Homepage -->
+  <url>
+    <loc>https://ogbomosocollegeofnursingscience2025.netlify.app/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- About -->
+  <url>
+    <loc>https://ogbomosocollegeofnursingscience2025.netlify.app/#about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Programs -->
+  <url>
+    <loc>https://ogbomosocollegeofnursingscience2025.netlify.app/#programs</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Why OGCONS -->
+  <url>
+    <loc>https://ogbomosocollegeofnursingscience2025.netlify.app/#why</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- How to Apply -->
+  <url>
+    <loc>https://ogbomosocollegeofnursingscience2025.netlify.app/#process</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Important Dates -->
+  <url>
+    <loc>https://ogbomosocollegeofnursingscience2025.netlify.app/#dates</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Contact -->
+  <url>
+    <loc>https://ogbomosocollegeofnursingscience2025.netlify.app/#contact</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+</urlset>
