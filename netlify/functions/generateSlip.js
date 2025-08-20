@@ -21,67 +21,78 @@ module.exports = function generateSlip(formData, paymentData) {
       const writeStream = fs.createWriteStream(slipPath);
       doc.pipe(writeStream);
 
-      // Header bar
-      doc.rect(0, 0, doc.page.width, 80).fill('#1155cc');
+      // -------------------- HEADER --------------------
+      const headerHeight = 80;
+      doc.rect(0, 0, doc.page.width, headerHeight).fill('#1155cc');
 
-      // Logo
+      // Logo (robust)
       const logoPath = path.join(__dirname, 'logo.png');
+      let logoExists = false;
       if (fs.existsSync(logoPath)) {
-        doc.image(logoPath, 50, 15, { width: 50, height: 50 });
+        try {
+          doc.image(logoPath, 50, 15, { width: 50, height: 50 });
+          logoExists = true;
+        } catch (err) {
+          console.log('Error loading logo:', err);
+        }
       }
 
-      // Title
-      doc.fillColor('#ffffff').fontSize(20)
-        .text('Ogbomoso College of Nursing Science', 120, 25);
+      const titleX = logoExists ? 120 : 50; // shift text if logo exists
+      doc.fillColor('#ffffff')
+         .font('Helvetica-Bold')
+         .fontSize(20)
+         .text('Ogbomoso College of Nursing Science', titleX, 25, { align: 'left' });
 
-      doc.fillColor('#000000');
-      doc.moveDown(6);
-      doc.fontSize(14).text('OGBOMOSO COLLEGE OF NURSING SCIENCE ACKNOLEDGEMENT SLIP COMPLETED', { align: 'center' });
+      // Acknowledgment heading
+      doc.fillColor('#000000')
+         .moveDown(4)
+         .font('Helvetica-Bold')
+         .fontSize(15)
+         .text(
+           'OGBOMOSO COLLEGE OF NURSING SCIENCE ACKNOWLEDGEMENT SLIP COMPLETED',
+           { align: 'center' }
+         );
 
-      // Generate reg number
+      doc.moveDown(2);
+
+      // -------------------- DETAILS --------------------
       const regNumber = generateRegNumber();
-
       const fullName =
         formData.fullname ||
         `${formData.surname || ''} ${formData.othernames || ''}`.trim() ||
         formData.fullName || 'N/A';
 
-      // Details
+      doc.font('Helvetica')
+         .fontSize(12)
+         .text(`Registration Number: ${regNumber}`)
+         .text(`Name: ${fullName}`)
+         .text(`Email: ${formData.email || 'N/A'}`)
+         .text(`Phone: ${formData.phone || 'N/A'}`)
+         .text(`Course: Basic Nursing`)
+         .text(`Payment Reference: ${paymentData?.reference || 'N/A'}`)
+         .text(`Amount Paid: ₦${paymentData?.amount ? (paymentData.amount / 100).toFixed(2) : '0.00'}`)
+         .text(`Payment Date: ${paymentData?.paidAt ? new Date(paymentData.paidAt).toLocaleString() : 'N/A'}`);
+
+      // -------------------- INSTRUCTIONS --------------------
       doc.moveDown(2);
-      doc.fontSize(12)
-        .text(`Registration Number: ${regNumber}`)
-        
-        .text(`Name: ${fullName}`)
-        
-        .text(`Email: ${formData.email || 'N/A'}`)
-        
-        .text(`Phone: ${formData.phone || 'N/A'}`)
-        
-        .text(`Course: Basic Nursing`)
-        
-        .text(`Payment Reference: ${paymentData?.reference || 'N/A'}`)
-        
-        .text(`Amount Paid: ₦${paymentData?.amount ? (paymentData.amount / 100).toFixed(2) : '0.00'}`)
-        
-        .text(`Payment Date: ${paymentData?.paidAt ? new Date(paymentData.paidAt).toLocaleString() : 'N/A'}`);
+      doc.font('Helvetica-Bold').text('INSTRUCTIONS', { underline: true });
+      doc.font('Helvetica')
+         .text('1. You must possess at least four (4) credits at not more than two sittings in the SSCE/NECO or its equivalent.')
+         .text('2. If admitted, you are expected to make your own accommodation arrangements and pay all the levies prescribed by the College.')
+         .text('3. Ensure you print this copy (page) coloured with the APPLICATION STATUS SHOWING COMPLETED.')
+         .text('4. Examination date will be communicated to you via the email you provided during registration.');
 
-      doc.moveDown(4);
-      doc.text( 'INSTRUCTIONS' )
-      doc.text( '1.You must possess at least four (4) credits at not more than two sittings in the SSCE/NECO or its equivalent.' )
-      doc.text( '2.If admitted, you are expected to make your own accommodation arrangements and pay all the levies prescribed by the College.' )
-      doc.text( '3.Ensure you print this copy(page) coloured with the APPLICATION STATUS SHOWING COMPLETED.' )
-      doc.text( '4.Examination date will be communicated to you via the email you provided during registration.' )
-
-      // Text-based Seal (bottom-right)
+      // -------------------- SEAL --------------------
       const cx = doc.page.width - 110;
       const cy = doc.page.height - 120;
       doc.save();
       doc.circle(cx, cy, 60).lineWidth(3).stroke('#1155cc');
-      doc.fontSize(8).fillColor('#1155cc')
-        .text('OGBOMOSO COLLEGE OF\nNURSING SCIENCE', cx - 50, cy - 36, { width: 100, align: 'center' });
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#1155cc')
+         .text('OGBOMOSO COLLEGE OF\nNURSING SCIENCE', cx - 50, cy - 36, { width: 100, align: 'center' });
       doc.fontSize(12).text('AUTHORISED', cx - 50, cy - 6, { width: 100, align: 'center' });
       doc.restore();
 
+      // -------------------- END --------------------
       doc.end();
 
       writeStream.on('finish', () => resolve(slipPath));
