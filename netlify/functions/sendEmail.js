@@ -151,6 +151,8 @@ Payment Reference: ${paymentData.reference}
 
 Please find your acknowledgment slip attached.
 
+join our aspirant group:https://chat.whatsapp.com/IjrU9Cd9e76EosYBVppftM?mode=ac_t
+
 Ogbomoso College of Nursing Science`,
             attachments: [{ filename: 'acknowledgment_slip.pdf', path: slipPath }],
           });
