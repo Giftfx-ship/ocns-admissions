@@ -96,11 +96,15 @@ module.exports = function generateSlip(formData, paymentData) {
          .text('3. Ensure you print this copy (page) coloured with the APPLICATION STATUS SHOWING COMPLETED.')
          .text('4. Examination date will be communicated to you via the email you provided during registration.');
 
-      // -------------------- STAMP --------------------
-      doc.font('Helvetica-Bold')
-         .fontSize(18)
-         .fillColor('blue')
-         .text('APPROVED', doc.page.width - 150, doc.page.height - 100, { align: 'right' });
+      // -------------------- SEAL --------------------  
+  const cx = doc.page.width - 110;  
+  const cy = doc.page.height - 120;  
+  doc.save();  
+  doc.circle(cx, cy, 60).lineWidth(3).stroke('#1155cc');  
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#1155cc')  
+     .text('OGBOMOSO COLLEGE OF\nNURSING SCIENCE', cx - 50, cy - 36, { width: 100, align: 'center' });  
+  doc.fontSize(12).text('AUTHORISED', cx - 50, cy - 6, { width: 100, align: 'center' });  
+  doc.restore();
 
       // -------------------- END --------------------
       doc.end();
